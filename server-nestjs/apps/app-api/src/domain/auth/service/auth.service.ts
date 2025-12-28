@@ -148,10 +148,8 @@ export class AuthService {
     if (dto.code.length === 8) {
       // Check backup codes
       const backupCodes = user.twoFactorBackupCodes || [];
-      const hashedCode = await bcrypt.hash(dto.code, 10);
-      const codeIndex = backupCodes.findIndex(async (bc) => await bcrypt.compare(dto.code, bc));
 
-      // Simple backup code check (they're stored as hashes)
+      // Check backup codes (they're stored as hashes)
       for (let i = 0; i < backupCodes.length; i++) {
         if (await bcrypt.compare(dto.code, backupCodes[i])) {
           isValid = true;
