@@ -1,0 +1,150 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'App to deploy'
+        required: true
+        type: choice
+        options:
+          - app-api
+          - notification
+          - cronjob-worker
+          - all
+          - infrastructure
+
+env:
+  REGISTRY: ${{ secrets.DOCKER_USERNAME }}
+
+jobs:
+  deploy-single:
+    if: ${{ github.event.inputs.app != 'all' && github.event.inputs.app != 'infrastructure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          envs: REGISTRY,GITHUB_SHA
+          script: |
+            set -e
+
+            mkdir -p ~/pingup
+            cd ~/pingup
+
+            curl -sO https://raw.githubusercontent.com/JiLee6902/ping-up/main/server-nestjs/docker-compose.prod.yml
+
+            if [ ! -f .env.production ]; then
+              echo "ERROR: .env.production not found! Please create it first."
+              exit 1
+            fi
+
+            echo "Docker Login..."
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login --username "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+            export VERSION="${{ github.sha }}"
+            export REGISTRY="${{ env.REGISTRY }}"
+
+            echo "Pulling pingup-${{ github.event.inputs.app }}..."
+            docker compose --env-file .env.production -f docker-compose.prod.yml pull ${{ github.event.inputs.app }}
+
+            echo "Restarting ${{ github.event.inputs.app }}..."
+            docker compose --env-file .env.production -f docker-compose.prod.yml up -d ${{ github.event.inputs.app }}
+
+            echo "Cleanup old images..."
+            docker image prune -af --filter "until=72h"
+
+            echo "${{ github.event.inputs.app }} deployed successfully!"
+
+      - name: Summary
+        run: |
+          echo "### Deploy Successful! :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**App:** ${{ github.event.inputs.app }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Host:** ${{ secrets.PRODUCTION_HOST }}" >> $GITHUB_STEP_SUMMARY
+
+  deploy-all:
+    if: ${{ github.event.inputs.app == 'all' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy All Services to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            set -e
+
+            mkdir -p ~/pingup
+            cd ~/pingup
+
+            curl -sO https://raw.githubusercontent.com/JiLee6902/ping-up/main/server-nestjs/docker-compose.prod.yml
+
+            if [ ! -f .env.production ]; then
+              echo "ERROR: .env.production not found! Please create it first."
+              exit 1
+            fi
+
+            echo "Docker Login..."
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login --username "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+            export VERSION="${{ github.sha }}"
+            export REGISTRY="${{ env.REGISTRY }}"
+
+            echo "Pulling all services..."
+            docker compose --env-file .env.production -f docker-compose.prod.yml pull app-api notification cronjob-worker
+
+            echo "Restarting all services..."
+            docker compose --env-file .env.production -f docker-compose.prod.yml up -d app-api notification cronjob-worker
+
+            echo "Cleanup old images..."
+            docker image prune -af --filter "until=72h"
+
+            echo "All services deployed successfully!"
+
+      - name: Summary
+        run: |
+          echo "### Deploy All Services Successful! :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+  deploy-infrastructure:
+    if: ${{ github.event.inputs.app == 'infrastructure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Infrastructure to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            set -e
+
+            mkdir -p ~/pingup
+            cd ~/pingup
+
+            curl -sO https://raw.githubusercontent.com/JiLee6902/ping-up/main/server-nestjs/docker-compose.prod.yml
+
+            if [ ! -f .env.production ]; then
+              echo "ERROR: .env.production not found! Please create it first."
+              exit 1
+            fi
+
+            echo "Starting infrastructure services..."
+            docker compose --env-file .env.production -f docker-compose.prod.yml up -d postgres redis
+
+            echo "Waiting for services to be healthy..."
+            sleep 30
+
+            echo "Infrastructure deployed!"
+            docker compose --env-file .env.production -f docker-compose.prod.yml ps
+
+      - name: Summary
+        run: |
+          echo "### Infrastructure Deployed! :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "Services: PostgreSQL, Redis" >> $GITHUB_STEP_SUMMARY

@@ -141,7 +141,7 @@ services:
         compress: "true"
 
   app-api:
-    image: ${REGISTRY:-pingup}/app-api:${VERSION:-latest}
+    image: ${REGISTRY}/pingup-app-api:${VERSION:-latest}
     container_name: pingup-app-api
     restart: unless-stopped
     env_file:
@@ -181,7 +181,7 @@ services:
         compress: "true"
 
   notification:
-    image: ${REGISTRY:-pingup}/notification:${VERSION:-latest}
+    image: ${REGISTRY}/pingup-notification:${VERSION:-latest}
     container_name: pingup-notification
     restart: unless-stopped
     env_file:
@@ -218,7 +218,7 @@ services:
         compress: "true"
 
   cronjob-worker:
-    image: ${REGISTRY:-pingup}/cronjob-worker:${VERSION:-latest}
+    image: ${REGISTRY}/pingup-cronjob-worker:${VERSION:-latest}
     container_name: pingup-cronjob-worker
     restart: unless-stopped
     env_file:

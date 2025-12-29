@@ -1,0 +1,59 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'App to rollback'
+        required: true
+        type: choice
+        options:
+          - app-api
+          - notification
+          - cronjob-worker
+
+env:
+  REGISTRY: ${{ secrets.DOCKER_USERNAME }}
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rollback on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            set -e
+
+            cd ~/pingup
+
+            echo "Docker Login..."
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login --username "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+            export REGISTRY="${{ env.REGISTRY }}"
+
+            PREVIOUS_TAG=$(docker images ${{ env.REGISTRY }}/pingup-${{ github.event.inputs.app }} \
+              --format "{{.Tag}}" | grep -v latest | head -2 | tail -1)
+
+            if [ -z "$PREVIOUS_TAG" ]; then
+              echo "No previous image found for rollback!"
+              exit 1
+            fi
+
+            echo "Rolling back to: ${PREVIOUS_TAG}"
+
+            export VERSION="${PREVIOUS_TAG}"
+
+            docker compose -f docker-compose.prod.yml stop ${{ github.event.inputs.app }}
+            docker compose -f docker-compose.prod.yml rm -f ${{ github.event.inputs.app }}
+            docker compose -f docker-compose.prod.yml up -d ${{ github.event.inputs.app }}
+
+            echo "Rollback completed!"
+
+      - name: Summary
+        run: |
+          echo "### Rollback Successful! :rewind:" >> $GITHUB_STEP_SUMMARY
+          echo "**App:** ${{ github.event.inputs.app }}" >> $GITHUB_STEP_SUMMARY
