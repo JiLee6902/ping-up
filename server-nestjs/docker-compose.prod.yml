@@ -13,6 +13,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
     networks:
       - pingup_network
     deploy:
@@ -67,78 +68,78 @@ services:
         max-file: "3"
         compress: "true"
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    container_name: pingup-zookeeper
-    restart: unless-stopped
-    environment:
-      KAFKA_HEAP_OPTS: "-Xmx64M -Xms64M"
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-      ZOOKEEPER_SYNC_LIMIT: 2
-      ZOOKEEPER_INIT_LIMIT: 5
-    volumes:
-      - zookeeper_data:/var/lib/zookeeper/data
-      - zookeeper_logs:/var/lib/zookeeper/log
-    networks:
-      - pingup_network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "2"
-        compress: "true"
+  # zookeeper:
+  #   image: confluentinc/cp-zookeeper:7.5.0
+  #   container_name: pingup-zookeeper
+  #   restart: unless-stopped
+  #   environment:
+  #     KAFKA_HEAP_OPTS: "-Xmx64M -Xms64M"
+  #     ZOOKEEPER_CLIENT_PORT: 2181
+  #     ZOOKEEPER_TICK_TIME: 2000
+  #     ZOOKEEPER_SYNC_LIMIT: 2
+  #     ZOOKEEPER_INIT_LIMIT: 5
+  #   volumes:
+  #     - zookeeper_data:/var/lib/zookeeper/data
+  #     - zookeeper_logs:/var/lib/zookeeper/log
+  #   networks:
+  #     - pingup_network
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '0.5'
+  #         memory: 512M
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "50m"
+  #       max-file: "2"
+  #       compress: "true"
 
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    container_name: pingup-kafka
-    restart: unless-stopped
-    depends_on:
-      - zookeeper
-    environment:
-      KAFKA_HEAP_OPTS: "-Xmx128M -Xms128M"
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_LOG_RETENTION_HOURS: 168
-      KAFKA_LOG_SEGMENT_BYTES: 1073741824
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_NUM_PARTITIONS: 3
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
-    volumes:
-      - kafka_data:/var/lib/kafka/data
-    networks:
-      - pingup_network
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-    healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "100m"
-        max-file: "3"
-        compress: "true"
+  # kafka:
+  #   image: confluentinc/cp-kafka:7.5.0
+  #   container_name: pingup-kafka
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - zookeeper
+  #   environment:
+  #     KAFKA_HEAP_OPTS: "-Xmx128M -Xms128M"
+  #     KAFKA_BROKER_ID: 1
+  #     KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+  #     KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092
+  #     KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092
+  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT
+  #     KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  #     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+  #     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+  #     KAFKA_LOG_RETENTION_HOURS: 168
+  #     KAFKA_LOG_SEGMENT_BYTES: 1073741824
+  #     KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+  #     KAFKA_NUM_PARTITIONS: 3
+  #     KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+  #   volumes:
+  #     - kafka_data:/var/lib/kafka/data
+  #   networks:
+  #     - pingup_network
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '1'
+  #         memory: 1G
+  #       reservations:
+  #         cpus: '0.5'
+  #         memory: 512M
+  #   healthcheck:
+  #     test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "100m"
+  #       max-file: "3"
+  #       compress: "true"
 
   app-api:
     image: ${REGISTRY}/pingup-app-api:${VERSION:-latest}
@@ -149,7 +150,6 @@ services:
     depends_on:
       - postgres
       - redis
-      - kafka
     ports:
       - "4000:4000"
     environment:
@@ -189,7 +189,6 @@ services:
     depends_on:
       - postgres
       - redis
-      - kafka
     ports:
       - "4001:4001"
     environment:
@@ -226,7 +225,6 @@ services:
     depends_on:
       - postgres
       - redis
-      - kafka
     environment:
       NODE_ENV: production
       PORT: 4002
@@ -253,9 +251,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  zookeeper_data:
-  zookeeper_logs:
-  kafka_data:
   app_api_logs:
   notification_logs:
   cronjob_logs:

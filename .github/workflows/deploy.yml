@@ -141,6 +141,9 @@ jobs:
             echo "Waiting for services to be healthy..."
             sleep 30
 
+            echo "Running migrations..."
+            docker compose --env-file .env.production -f docker-compose.prod.yml exec -T postgres psql -U $DB_USERNAME -d $DB_NAME -f /docker-entrypoint-initdb.d/001_add_search_vector.sql || true
+
             echo "Infrastructure deployed!"
             docker compose --env-file .env.production -f docker-compose.prod.yml ps
 
