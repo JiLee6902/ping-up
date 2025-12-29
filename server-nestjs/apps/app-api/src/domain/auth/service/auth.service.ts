@@ -165,7 +165,7 @@ export class AuthService {
       // Check TOTP code
       isValid = authenticator.verify({
         token: dto.code,
-        secret: user.twoFactorSecret,
+        secret: user.twoFactorSecret!,
       });
     }
 
@@ -339,7 +339,7 @@ export class AuthService {
     // Verify the code
     const isValid = authenticator.verify({
       token: dto.code,
-      secret: user.twoFactorSecret,
+      secret: user.twoFactorSecret!,
     });
 
     if (!isValid) {
@@ -368,7 +368,7 @@ export class AuthService {
     // Verify the code
     const isValid = authenticator.verify({
       token: dto.code,
-      secret: user.twoFactorSecret,
+      secret: user.twoFactorSecret!,
     });
 
     if (!isValid) {
