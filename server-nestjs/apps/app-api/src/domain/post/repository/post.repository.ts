@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, SelectQueryBuilder } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Post, User, Connection, Bookmark } from '@app/entity';
 import { ConnectionStatus, PostType } from '@app/enum';
 import { AdvancedSearchDto, SortBy, SortOrder, MediaFilter } from '../dto';
+import { RedisLikeService } from '@app/external-infra/redis';
 
 @Injectable()
 export class PostRepository {
@@ -16,6 +17,7 @@ export class PostRepository {
     private readonly connectionRepository: Repository<Connection>,
     @InjectRepository(Bookmark)
     private readonly bookmarkRepository: Repository<Bookmark>,
+    private readonly redisLikeService: RedisLikeService,
   ) {}
 
   async create(postData: Partial<Post>): Promise<Post> {
@@ -107,8 +109,12 @@ export class PostRepository {
   async createRepost(userId: string, originalPostId: string): Promise<{ post: Post; reposterUser: User }> {
     const reposterUser = await this.userRepository.findOne({ where: { id: userId } });
 
+    if (!reposterUser) {
+      throw new Error('User not found');
+    }
+
     const post = this.postRepository.create({
-      user: { id: userId } as User,
+      userId,
       postType: PostType.REPOST,
       originalPostId,
       likesCount: 0,
@@ -185,30 +191,89 @@ export class PostRepository {
       throw new Error('User not found');
     }
 
-    const likes = post.likes || [];
-    const isCurrentlyLiked = likes.some((u) => u.id === userId);
+    // Check if Redis has the likes data, if not, warm the cache
+    const hasRedisData = await this.redisLikeService.hasLikesData(postId);
+    if (!hasRedisData) {
+      const likerIds = (post.likes || []).map((u) => u.id);
+      await this.redisLikeService.syncLikesFromDb(postId, likerIds);
+    }
 
-    if (isCurrentlyLiked) {
-      // Unlike
-      post.likes = likes.filter((u) => u.id !== userId);
-      post.likesCount = Math.max(0, post.likesCount - 1);
+    // Use Redis Lua script for atomic toggle
+    const result = await this.redisLikeService.toggleLike(postId, userId);
+
+    // Persist to database
+    if (result.isLiked) {
+      // Add like to DB
+      post.likes = [...(post.likes || []), user];
+      post.likesCount = result.likesCount;
     } else {
-      // Like
-      post.likes = [...likes, user];
-      post.likesCount = post.likesCount + 1;
+      // Remove like from DB
+      post.likes = (post.likes || []).filter((u) => u.id !== userId);
+      post.likesCount = Math.max(0, result.likesCount);
     }
 
     await this.postRepository.save(post);
 
-    return { post, isLiked: !isCurrentlyLiked, likerUser: user };
+    return { post, isLiked: result.isLiked, likerUser: user };
   }
 
   async isLikedByUser(postId: string, userId: string): Promise<boolean> {
+    // Check Redis first
+    const hasRedisData = await this.redisLikeService.hasLikesData(postId);
+    if (hasRedisData) {
+      return this.redisLikeService.isLiked(postId, userId);
+    }
+
+    // Fall back to DB and warm cache
     const post = await this.postRepository.findOne({
       where: { id: postId },
       relations: ['likes'],
     });
-    return post?.likes?.some((u) => u.id === userId) || false;
+
+    if (post?.likes) {
+      const likerIds = post.likes.map((u) => u.id);
+      await this.redisLikeService.syncLikesFromDb(postId, likerIds);
+      return likerIds.includes(userId);
+    }
+
+    return false;
+  }
+
+  /**
+   * Get like status for multiple posts using Redis batch check
+   */
+  async getLikeStatusForPosts(
+    userId: string,
+    postIds: string[],
+  ): Promise<Map<string, boolean>> {
+    if (postIds.length === 0) {
+      return new Map();
+    }
+
+    // First, check which posts have Redis data
+    const postsNeedingSync: string[] = [];
+    for (const postId of postIds) {
+      const hasData = await this.redisLikeService.hasLikesData(postId);
+      if (!hasData) {
+        postsNeedingSync.push(postId);
+      }
+    }
+
+    // Warm cache for posts that don't have Redis data
+    if (postsNeedingSync.length > 0) {
+      const posts = await this.postRepository.find({
+        where: { id: In(postsNeedingSync) },
+        relations: ['likes'],
+      });
+
+      for (const post of posts) {
+        const likerIds = (post.likes || []).map((u) => u.id);
+        await this.redisLikeService.syncLikesFromDb(post.id, likerIds);
+      }
+    }
+
+    // Now use Redis batch check
+    return this.redisLikeService.checkLikesForPosts(postIds, userId);
   }
 
   async deletePost(postId: string): Promise<void> {
@@ -216,11 +281,17 @@ export class PostRepository {
     await this.postRepository.delete({ originalPostId: postId });
     // Then delete the post itself
     await this.postRepository.delete(postId);
+    // Invalidate Redis likes cache
+    await this.redisLikeService.invalidateLikesCache(postId);
   }
 
   async updatePost(postId: string, data: Partial<Post>): Promise<Post> {
     await this.postRepository.update(postId, data);
-    return this.findById(postId);
+    const post = await this.findById(postId);
+    if (!post) {
+      throw new Error('Post not found after update');
+    }
+    return post;
   }
 
   async searchPosts(query: string, limit = 50, offset = 0): Promise<Post[]> {
@@ -434,7 +505,7 @@ export class PostRepository {
         id: u.id,
         username: u.username,
         fullName: u.fullName,
-        profilePicture: u.profilePicture,
+        profilePicture: u.profilePicture || '',
       })),
     };
   }
