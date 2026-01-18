@@ -9,6 +9,7 @@ import ChatSettingsModal from '../components/ChatSettingsModal'
 import VideoCall from '../components/VideoCall'
 import { useSocket } from '../context/SocketContext'
 import EmojiPicker from '../components/EmojiPicker'
+import Loading from '../components/Loading'
 
 const ChatBox = () => {
   const { messages } = useSelector((state) => state.messages)
@@ -26,6 +27,7 @@ const ChatBox = () => {
   const [activeCall, setActiveCall] = useState(null)
   const [isSending, setIsSending] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [loadingUser, setLoadingUser] = useState(true)
   const messagesEndRef = useRef(null)
 
   const { socket, isUserOnline, fetchOnlineStatus } = useSocket()
@@ -176,15 +178,37 @@ const ChatBox = () => {
     }
   }, [userId])
 
+  // Fetch user data - from connections or API
   useEffect(() => {
-    if (connections.length > 0) {
-      const connection = connections.find(c => {
-        const u = c.user || c
-        return (u.id || u._id) === userId
-      })
-      if (connection) {
-        setUser(connection.user || connection)
+    const fetchUser = async () => {
+      setLoadingUser(true)
+      // First, check if user is in connections
+      if (connections.length > 0) {
+        const connection = connections.find(c => {
+          const u = c.user || c
+          return (u.id || u._id) === userId
+        })
+        if (connection) {
+          setUser(connection.user || connection)
+          setLoadingUser(false)
+          return
+        }
       }
+      // If not found in connections, fetch from API
+      try {
+        const { data } = await api.post('/api/user/profiles', { userId })
+        if (data.success) {
+          const responseData = data.data || data
+          setUser(responseData.user || responseData.profile)
+        }
+      } catch (error) {
+        console.error('Failed to fetch user:', error)
+      }
+      setLoadingUser(false)
+    }
+
+    if (userId) {
+      fetchUser()
     }
   }, [connections, userId])
 
@@ -198,14 +222,23 @@ const ChatBox = () => {
   const displayName = chatSettings?.nickname || fullName
   const isOnline = isUserOnline(userId)
 
+  // Helper to normalize date string with timezone
+  const normalizeDate = (dateString) => {
+    if (!dateString) return new Date()
+    if (!dateString.endsWith('Z') && !dateString.includes('+') && !dateString.includes('-', 10)) {
+      return new Date(dateString + 'Z')
+    }
+    return new Date(dateString)
+  }
+
   const formatSeenTime = (dateString) => {
     if (!dateString) return ''
-    const date = new Date(dateString)
+    const date = normalizeDate(dateString)
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
   }
 
   // Sort messages and check if last message is sent by current user and seen
-  const sortedMessages = messages.toSorted((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+  const sortedMessages = messages.toSorted((a, b) => normalizeDate(a.createdAt) - normalizeDate(b.createdAt))
   const lastMessage = sortedMessages[sortedMessages.length - 1]
   const lastMessageToUserId = lastMessage?.toUser?.id || lastMessage?.toUserId || lastMessage?.to_user_id
   const isLastMessageSentByMe = lastMessageToUserId === chatUserId
@@ -215,7 +248,7 @@ const ChatBox = () => {
   const allItems = [
     ...sortedMessages.map(m => ({ ...m, type: 'message' })),
     ...chatEvents.map(e => ({ ...e, type: 'event' })),
-  ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+  ].sort((a, b) => normalizeDate(a.createdAt) - normalizeDate(b.createdAt))
 
   // Get message color or default blue
   const msgColor = chatSettings?.messageColor || '#3b82f6'
@@ -236,7 +269,19 @@ const ChatBox = () => {
     }
   }
 
-  return user && (
+  if (loadingUser) {
+    return <Loading />
+  }
+
+  if (!user) {
+    return (
+      <div className='flex items-center justify-center h-screen'>
+        <p className='text-gray-500'>User not found</p>
+      </div>
+    )
+  }
+
+  return (
     <div
       className='flex flex-col h-screen'
       style={{

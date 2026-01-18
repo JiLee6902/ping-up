@@ -9,6 +9,16 @@ const RecentMessages = () => {
   const [messages, setMessages] = useState([])
   const { user } = useSelector((state) => state.auth)
 
+  // Helper to parse date with proper timezone handling
+  const parseDate = (dateString) => {
+    if (!dateString) return moment()
+    // If no timezone info, treat as UTC
+    if (!dateString.endsWith('Z') && !dateString.includes('+') && !dateString.includes('-', 10)) {
+      return moment.utc(dateString).local()
+    }
+    return moment(dateString)
+  }
+
   const fetchRecentMessages = async () => {
     try {
       const { data } = await api.get('/api/user/recent-messages')
@@ -63,7 +73,7 @@ const RecentMessages = () => {
                 <div className='w-full'>
                   <div className='flex justify-between'>
                     <p className='font-medium'>{fullName}</p>
-                    <p className='text-[10px] text-slate-400'>{moment(message.createdAt).fromNow()}</p>
+                    <p className='text-[10px] text-slate-400'>{parseDate(message.createdAt).fromNow()}</p>
                   </div>
                   <div className='flex justify-between'>
                     <p className='text-gray-500'>{message.text ? message.text : 'Media'}</p>

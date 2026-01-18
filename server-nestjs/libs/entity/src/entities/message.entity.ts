@@ -43,6 +43,12 @@ export class Message extends BaseEntity {
   @Column({ name: 'seen_at', type: 'timestamp', nullable: true })
   seenAt?: Date;
 
+  @Column({ name: 'is_message_request', default: false })
+  isMessageRequest: boolean;
+
+  @Column({ name: 'is_request_accepted', default: false })
+  isRequestAccepted: boolean;
+
   @ManyToOne(() => User, (user) => user.sentMessages, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'from_user_id' })
   fromUser: User;

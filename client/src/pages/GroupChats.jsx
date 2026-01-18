@@ -29,7 +29,12 @@ const GroupChats = () => {
 
   const formatTime = (dateString) => {
     if (!dateString) return ''
-    const date = new Date(dateString)
+    // Ensure timezone is handled correctly - append Z if no timezone info
+    let normalizedDateString = dateString
+    if (!dateString.endsWith('Z') && !dateString.includes('+') && !dateString.includes('-', 10)) {
+      normalizedDateString = dateString + 'Z'
+    }
+    const date = new Date(normalizedDateString)
     const now = new Date()
     const diffMs = now - date
     const diffMins = Math.floor(diffMs / 60000)

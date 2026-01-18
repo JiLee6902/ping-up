@@ -83,9 +83,9 @@ const NicknameModal = ({ currentUser, chatUser, chatSettings, onClose, onUpdate 
         {/* Header */}
         <div className='flex items-center justify-between p-4 border-b'>
           <div className='w-8' />
-          <h2 className='text-lg font-semibold'>Nicknames</h2>
+          <h2 className='text-lg font-semibold text-gray-900'>Nicknames</h2>
           <button onClick={onClose} className='p-1 hover:bg-gray-100 rounded-full cursor-pointer'>
-            <X className='w-6 h-6' />
+            <X className='w-6 h-6 text-gray-700' />
           </button>
         </div>
 
@@ -102,7 +102,7 @@ const NicknameModal = ({ currentUser, chatUser, chatSettings, onClose, onUpdate 
                     value={nicknameInput}
                     onChange={(e) => setNicknameInput(e.target.value)}
                     placeholder={chatUserName}
-                    className='flex-1 min-w-0 px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900'
+                    className='flex-1 min-w-0 px-3 py-2 text-base text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900'
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && handleSave(chatUserId)}
                   />
@@ -122,8 +122,8 @@ const NicknameModal = ({ currentUser, chatUser, chatSettings, onClose, onUpdate 
                 </div>
               ) : (
                 <>
-                  <p className='font-semibold text-lg'>{nicknameForPartner || chatUserName}</p>
-                  <p className='text-sm text-gray-500'>
+                  <p className='font-semibold text-lg text-gray-900'>{nicknameForPartner || chatUserName}</p>
+                  <p className='text-sm text-gray-600'>
                     {nicknameForPartner ? chatUserName : 'Set a nickname'}
                   </p>
                 </>
@@ -134,7 +134,7 @@ const NicknameModal = ({ currentUser, chatUser, chatSettings, onClose, onUpdate 
                 onClick={() => handleEdit(chatUserId, nicknameForPartner)}
                 className='p-2 hover:bg-gray-100 rounded-full cursor-pointer'
               >
-                <Pencil className='w-6 h-6' />
+                <Pencil className='w-5 h-5 text-gray-600' />
               </button>
             )}
           </div>
@@ -150,7 +150,7 @@ const NicknameModal = ({ currentUser, chatUser, chatSettings, onClose, onUpdate 
                     value={nicknameInput}
                     onChange={(e) => setNicknameInput(e.target.value)}
                     placeholder={currentUserName}
-                    className='flex-1 min-w-0 px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900'
+                    className='flex-1 min-w-0 px-3 py-2 text-base text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900'
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && handleSave(currentUserId)}
                   />
@@ -170,8 +170,8 @@ const NicknameModal = ({ currentUser, chatUser, chatSettings, onClose, onUpdate 
                 </div>
               ) : (
                 <>
-                  <p className='font-semibold text-lg'>{nicknameForMe || currentUserName}</p>
-                  <p className='text-sm text-gray-500'>
+                  <p className='font-semibold text-lg text-gray-900'>{nicknameForMe || currentUserName}</p>
+                  <p className='text-sm text-gray-600'>
                     {nicknameForMe ? currentUserName : 'Set a nickname'}
                   </p>
                 </>
@@ -182,7 +182,7 @@ const NicknameModal = ({ currentUser, chatUser, chatSettings, onClose, onUpdate 
                 onClick={() => handleEdit(currentUserId, nicknameForMe)}
                 className='p-2 hover:bg-gray-100 rounded-full cursor-pointer'
               >
-                <Pencil className='w-6 h-6' />
+                <Pencil className='w-5 h-5 text-gray-600' />
               </button>
             )}
           </div>

@@ -41,7 +41,7 @@ export class NotificationRepository {
       { id: notificationId, recipientId },
       { isRead: true },
     );
-    return result.affected > 0;
+    return (result.affected ?? 0) > 0;
   }
 
   async markAllAsRead(recipientId: string): Promise<void> {
@@ -56,7 +56,7 @@ export class NotificationRepository {
       id: notificationId,
       recipientId,
     });
-    return result.affected > 0;
+    return (result.affected ?? 0) > 0;
   }
 
   async deleteByActorAndType(

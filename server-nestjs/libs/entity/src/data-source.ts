@@ -8,6 +8,8 @@ config({ path: envFile });
 // Fallback to .env.local
 config({ path: '.env.local' });
 
+// NOTE: pg types configuration is in index.ts to ensure it runs before any DB connection
+
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
   host: process.env.DB_HOST || 'localhost',

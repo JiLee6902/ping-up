@@ -2,14 +2,14 @@ import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import { assets } from '../assets/assets'
-import Loading from '../components/Loading'
 import StoriesBar from '../components/StoriesBar'
 import PostCard from '../components/PostCard'
 import RecentMessages from '../components/RecentMessages'
 import AuthPromptModal from '../components/AuthPromptModal'
+import { PostCardSkeleton } from '../components/Skeleton'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
-import { RefreshCw, Loader2 } from 'lucide-react'
+import { RefreshCw, Loader2, Sparkles, Users } from 'lucide-react'
 
 const LIMIT = 10
 
@@ -187,14 +187,38 @@ const Feed = () => {
         </div>
 
         {loading ? (
-          <Loading height='40vh' />
+          <div className='p-4 space-y-6'>
+            {[1, 2, 3].map((i) => (
+              <PostCardSkeleton key={i} />
+            ))}
+          </div>
         ) : (
           <div className='p-4 space-y-6'>
             {feeds.length === 0 ? (
-              <div className='text-center py-10 text-gray-500 dark:text-gray-400'>
-                {activeTab === 'foryou'
-                  ? 'No posts yet. Follow some people to see their posts!'
-                  : 'No posts yet.'}
+              <div className='text-center py-16 px-4'>
+                <div className='w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-full flex items-center justify-center'>
+                  {activeTab === 'foryou' ? (
+                    <Users className='w-10 h-10 text-blue-500' />
+                  ) : (
+                    <Sparkles className='w-10 h-10 text-purple-500' />
+                  )}
+                </div>
+                <h3 className='text-lg font-semibold text-gray-900 dark:text-white mb-2'>
+                  {activeTab === 'foryou' ? 'Your feed is empty' : 'No posts yet'}
+                </h3>
+                <p className='text-gray-500 dark:text-gray-400 max-w-xs mx-auto'>
+                  {activeTab === 'foryou'
+                    ? 'Follow people you know to see their posts and updates here!'
+                    : 'Be the first to share something with the community!'}
+                </p>
+                {activeTab === 'foryou' && (
+                  <button
+                    onClick={() => navigate('/discover')}
+                    className='mt-4 px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-full text-sm font-medium transition-colors cursor-pointer'
+                  >
+                    Discover People
+                  </button>
+                )}
               </div>
             ) : (
               <>
@@ -221,8 +245,16 @@ const Feed = () => {
 
                 {/* End of feed message */}
                 {!hasMore && feeds.length > 0 && (
-                  <div className='text-center py-6 text-gray-400 dark:text-gray-500 text-sm'>
-                    You've reached the end
+                  <div className='text-center py-8'>
+                    <div className='inline-flex items-center justify-center w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full mb-3'>
+                      <Sparkles className='w-6 h-6 text-gray-400' />
+                    </div>
+                    <p className='text-gray-500 dark:text-gray-400 text-sm'>
+                      You're all caught up!
+                    </p>
+                    <p className='text-gray-400 dark:text-gray-500 text-xs mt-1'>
+                      Check back later for new posts
+                    </p>
                   </div>
                 )}
               </>

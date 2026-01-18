@@ -83,8 +83,8 @@ export class AuthRepository {
   async disableTwoFactor(userId: string): Promise<void> {
     await this.userRepository.update(userId, {
       twoFactorEnabled: false,
-      twoFactorSecret: null,
-      twoFactorBackupCodes: null,
+      twoFactorSecret: null as unknown as string,
+      twoFactorBackupCodes: null as unknown as string[],
     });
   }
 

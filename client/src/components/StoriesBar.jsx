@@ -8,24 +8,17 @@ import toast from 'react-hot-toast'
 
 const StoriesBar = () => {
 
-    const [stories, setStories] = useState([])
+    const [storyGroups, setStoryGroups] = useState([]) // Grouped by user
     const [showModal, setShowModal] = useState(false)
-    const [viewStory, setViewStory] = useState(null)
+    const [viewingGroup, setViewingGroup] = useState(null) // {user, stories: [...]}
 
     const fetchStories = async () => {
         try {
             const { data } = await api.get('/api/story/get')
             if (data.success){
                 // Server returns grouped stories: [{user, stories: [...]}]
-                // Flatten to get all stories with user info
                 const groupedData = data.data || data.stories || []
-                const flatStories = groupedData.flatMap(group =>
-                    (group.stories || []).map(story => ({
-                        ...story,
-                        user: group.user
-                    }))
-                )
-                setStories(flatStories)
+                setStoryGroups(groupedData)
             }else{
                 toast(data.message)
             }
@@ -44,49 +37,77 @@ const StoriesBar = () => {
 
         <div className='flex gap-4 pb-5'>
             {/* Add Story Card */}
-            <div onClick={()=>setShowModal(true)} className='rounded-lg shadow-sm min-w-30 max-w-30 max-h-40 aspect-[3/4] cursor-pointer hover:shadow-lg transition-all duration-200 border-2 border-dashed border-gray-300 bg-gray-50'>
+            <div onClick={()=>setShowModal(true)} className='rounded-lg shadow-sm min-w-30 max-w-30 max-h-40 aspect-[3/4] cursor-pointer hover:shadow-lg transition-all duration-200 border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800'>
                 <div className='h-full flex flex-col items-center justify-center p-4'>
-                    <div className='size-10 bg-gray-800 rounded-full flex items-center justify-center mb-3'>
+                    <div className='size-10 bg-gray-800 dark:bg-gray-600 rounded-full flex items-center justify-center mb-3'>
                         <Plus className='w-5 h-5 text-white'/>
                     </div>
-                    <p className='text-sm font-medium text-slate-700 text-center'>Create Story</p>
+                    <p className='text-sm font-medium text-slate-700 dark:text-gray-300 text-center'>Create Story</p>
                 </div>
             </div>
-            {/* Story Cards */}
-            {
-                stories.map((story, index)=> {
-                    const mediaType = story.mediaType || story.media_type
-                    const mediaUrl = story.mediaUrl || story.media_url
-                    const profilePicture = story.user?.profilePicture || story.user?.profile_picture
-                    return (
-                        <div onClick={()=> setViewStory(story)} key={story.id || index} className={`relative rounded-lg shadow min-w-30 max-w-30 max-h-40 cursor-pointer hover:shadow-lg transition-all duration-200 bg-gradient-to-b from-gray-700 to-gray-900 hover:from-gray-800 hover:to-black active:scale-95`}>
-                            <img src={profilePicture} alt="" className='absolute size-8 top-3 left-3 z-10 rounded-full ring ring-gray-100 shadow'/>
-                            <p className='absolute top-18 left-3 text-white/60 text-sm truncate max-w-24'>{story.content}</p>
-                            <p className='text-white absolute bottom-1 right-2 z-10 text-xs'>{moment(story.createdAt).fromNow()}</p>
-                            {
-                                mediaType !== 'text' && (
-                                    <div className='absolute inset-0 z-1 rounded-lg bg-black overflow-hidden'>
-                                        {
-                                            mediaType === "image" ?
-                                            <img src={mediaUrl} alt="" className='h-full w-full object-cover hover:scale-110 transition duration-500 opacity-70 hover:opacity-80'/>
-                                            :
-                                            <video src={mediaUrl} className='h-full w-full object-cover hover:scale-110 transition duration-500 opacity-70 hover:opacity-80'/>
-                                        }
-                                    </div>
-                                )
-                            }
+            {/* Story Cards - One per user */}
+            {storyGroups.map((group, index) => {
+                const user = group.user
+                const stories = group.stories || []
+                const hasUnviewedStories = group.hasUnviewedStories
+                if (stories.length === 0) return null
 
+                // Get the latest story for preview
+                const latestStory = stories[0]
+                const mediaType = latestStory?.mediaType || latestStory?.media_type
+                const mediaUrl = latestStory?.mediaUrl || latestStory?.media_url
+                const profilePicture = user?.profilePicture || user?.profile_picture
+                const storyCount = stories.length
+
+                // Ring color based on viewed status
+                const ringClass = hasUnviewedStories
+                    ? 'ring-2 ring-blue-500' // Unviewed - blue ring
+                    : 'ring-2 ring-gray-400' // All viewed - gray ring
+
+                return (
+                    <div
+                        onClick={() => setViewingGroup(group)}
+                        key={user?.id || index}
+                        className='relative rounded-lg shadow min-w-30 max-w-30 max-h-40 cursor-pointer hover:shadow-lg transition-all duration-200 bg-gradient-to-b from-gray-700 to-gray-900 hover:from-gray-800 hover:to-black active:scale-95 overflow-hidden'
+                    >
+                        {/* User avatar with ring indicator - blue for unviewed, gray for viewed */}
+                        <div className={`absolute top-3 left-3 z-10 ${ringClass} rounded-full`}>
+                            <img src={profilePicture} alt="" className='size-8 rounded-full object-cover shadow'/>
                         </div>
-                    )
-                })
-            }
+
+
+                        <p className='absolute top-18 left-3 text-white/60 text-sm truncate max-w-24 z-10'>{latestStory?.content}</p>
+                        <p className='text-white absolute bottom-1 right-2 z-10 text-xs'>{moment(latestStory?.createdAt).fromNow()}</p>
+
+                        {mediaType !== 'text' && (
+                            <div className='absolute inset-0 z-1 rounded-lg bg-black overflow-hidden'>
+                                {mediaType === "image" ? (
+                                    <img src={mediaUrl} alt="" className='h-full w-full object-cover hover:scale-110 transition duration-500 opacity-70 hover:opacity-80'/>
+                                ) : (
+                                    <video src={mediaUrl} className='h-full w-full object-cover hover:scale-110 transition duration-500 opacity-70 hover:opacity-80'/>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )
+            })}
         </div>
 
         {/* Add Story Modal */}
         {showModal && <StoryModal setShowModal={setShowModal} fetchStories={fetchStories}/>}
-        {/* View Story Modal */}
-        {viewStory && <StoryViewer viewStory={viewStory} setViewStory={setViewStory} onDelete={() => fetchStories()}/>}
-      
+
+        {/* View Story Modal - Now handles multiple stories from same user */}
+        {viewingGroup && (
+            <StoryViewer
+                storyGroup={viewingGroup}
+                onClose={() => {
+                    setViewingGroup(null)
+                    fetchStories() // Refetch to update viewed status
+                }}
+                onDelete={() => fetchStories()}
+            />
+        )}
+
     </div>
   )
 }

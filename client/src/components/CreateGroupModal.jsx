@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react'
-import { X, Camera, Search, Check, Users } from 'lucide-react'
-import { useSelector } from 'react-redux'
+import React, { useState, useEffect, useMemo } from 'react'
+import { X, Camera, Search, Check, Users, Loader2 } from 'lucide-react'
+import { useSelector, useDispatch } from 'react-redux'
+import { fetchConnections } from '../features/connections/connectionsSlice'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
 
 const CreateGroupModal = ({ onClose, onCreated }) => {
-  const { connections } = useSelector((state) => state.connections)
+  const dispatch = useDispatch()
+  const { accessToken } = useSelector((state) => state.auth)
+  const { connections, followers, following } = useSelector((state) => state.connections)
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -14,6 +17,18 @@ const CreateGroupModal = ({ onClose, onCreated }) => {
   const [selectedMembers, setSelectedMembers] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Always fetch connections when modal opens
+  useEffect(() => {
+    dispatch(fetchConnections(accessToken)).finally(() => setIsLoading(false))
+  }, [dispatch, accessToken])
+
+  // Compute mutual follows: users who are in BOTH followers AND following
+  const mutualFollows = useMemo(() => {
+    const followerIds = new Set(followers.map(u => String(u.id || u._id)))
+    return following.filter(u => followerIds.has(String(u.id || u._id)))
+  }, [followers, following])
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0]
@@ -31,13 +46,21 @@ const CreateGroupModal = ({ onClose, onCreated }) => {
     )
   }
 
-  const filteredConnections = connections.filter(item => {
-    const user = item.user || item
-    const fullName = user.fullName || user.full_name || ''
-    const username = user.username || ''
+  // Filter mutual follows by search query
+  const filteredMutualFollows = useMemo(() => {
+    if (!searchQuery.trim()) return mutualFollows
     const query = searchQuery.toLowerCase()
-    return fullName.toLowerCase().includes(query) || username.toLowerCase().includes(query)
-  })
+    return mutualFollows.filter(user => {
+      const fullName = user.fullName || user.full_name || ''
+      const username = user.username || ''
+      return fullName.toLowerCase().includes(query) || username.toLowerCase().includes(query)
+    })
+  }, [mutualFollows, searchQuery])
+
+  // Get selected users info for display
+  const selectedUsers = useMemo(() => {
+    return mutualFollows.filter(u => selectedMembers.includes(u.id || u._id))
+  }, [mutualFollows, selectedMembers])
 
   const handleCreate = async () => {
     if (!name.trim()) {
@@ -75,7 +98,7 @@ const CreateGroupModal = ({ onClose, onCreated }) => {
 
   return (
     <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4'>
-      <div className='bg-white dark:bg-gray-800 rounded-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col'>
+      <div className='bg-white dark:bg-gray-800 rounded-xl w-full max-w-md max-h-[90vh] flex flex-col'>
         {/* Header */}
         <div className='flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700'>
           <h2 className='text-lg font-semibold text-gray-900 dark:text-white'>Create Group</h2>
@@ -134,8 +157,29 @@ const CreateGroupModal = ({ onClose, onCreated }) => {
               </span>
             </div>
 
-            {/* Search */}
-            <div className='relative mb-3'>
+            {/* Selected Members Display */}
+            {selectedUsers.length > 0 && (
+              <div className='flex flex-wrap gap-2 mb-2'>
+                {selectedUsers.map(user => (
+                  <div
+                    key={user.id || user._id}
+                    className='flex items-center gap-1.5 pl-1 pr-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-full text-sm'
+                  >
+                    <img src={user.profilePicture || user.profile_picture} alt="" className='w-5 h-5 rounded-full object-cover' />
+                    <span>{user.fullName || user.full_name}</span>
+                    <button
+                      onClick={() => toggleMember(user.id || user._id)}
+                      className='ml-1 hover:text-blue-900 dark:hover:text-blue-100'
+                    >
+                      <X className='w-3.5 h-3.5' />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Search Input */}
+            <div className='relative mb-2'>
               <Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400' />
               <input
                 type="text"
@@ -146,15 +190,20 @@ const CreateGroupModal = ({ onClose, onCreated }) => {
               />
             </div>
 
-            {/* Connections List */}
-            <div className='space-y-2 max-h-48 overflow-y-auto'>
-              {filteredConnections.length === 0 ? (
-                <p className='text-center text-gray-500 dark:text-gray-400 py-4'>
-                  No connections found
+            {/* Users List */}
+            <div className='border border-gray-200 dark:border-gray-600 rounded-lg max-h-40 overflow-y-auto'>
+              {isLoading ? (
+                <div className='flex items-center justify-center py-4'>
+                  <Loader2 className='w-5 h-5 text-blue-500 animate-spin' />
+                </div>
+              ) : filteredMutualFollows.length === 0 ? (
+                <p className='text-center text-gray-500 dark:text-gray-400 py-4 text-sm'>
+                  {mutualFollows.length === 0
+                    ? 'No mutual follows yet'
+                    : 'No results found'}
                 </p>
               ) : (
-                filteredConnections.map(item => {
-                  const user = item.user || item
+                filteredMutualFollows.map(user => {
                   const userId = user.id || user._id
                   const profilePicture = user.profilePicture || user.profile_picture
                   const fullName = user.fullName || user.full_name
@@ -164,23 +213,23 @@ const CreateGroupModal = ({ onClose, onCreated }) => {
                     <div
                       key={userId}
                       onClick={() => toggleMember(userId)}
-                      className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${
+                      className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition ${
                         isSelected
-                          ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800'
-                          : 'hover:bg-gray-50 dark:hover:bg-gray-700 border border-transparent'
+                          ? 'bg-blue-50 dark:bg-blue-900/30'
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                       }`}
                     >
-                      <img src={profilePicture} alt="" className='w-10 h-10 rounded-full object-cover' />
+                      <img src={profilePicture} alt="" className='w-8 h-8 rounded-full object-cover' />
                       <div className='flex-1 min-w-0'>
-                        <p className='font-medium text-gray-900 dark:text-white truncate'>{fullName}</p>
-                        <p className='text-sm text-gray-500 dark:text-gray-400'>@{user.username}</p>
+                        <p className='font-medium text-gray-900 dark:text-white text-sm truncate'>{fullName}</p>
+                        <p className='text-xs text-gray-500 dark:text-gray-400'>@{user.username}</p>
                       </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition ${
+                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition ${
                         isSelected
                           ? 'bg-blue-500 border-blue-500'
                           : 'border-gray-300 dark:border-gray-500'
                       }`}>
-                        {isSelected && <Check className='w-3 h-3 text-white' />}
+                        {isSelected && <Check className='w-2.5 h-2.5 text-white' />}
                       </div>
                     </div>
                   )

@@ -55,4 +55,20 @@ export class StoryController {
   ) {
     return this.storyService.deleteStory(storyId, user.id);
   }
+
+  @Post('like/:storyId')
+  async likeStory(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('storyId') storyId: string,
+  ) {
+    return this.storyService.likeStory(storyId, user.id);
+  }
+
+  @Get('likes/:storyId')
+  async getStoryLikes(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('storyId') storyId: string,
+  ) {
+    return this.storyService.getStoryLikes(storyId, user.id);
+  }
 }

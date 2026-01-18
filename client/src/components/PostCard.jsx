@@ -470,31 +470,65 @@ const PostCard = ({ post, onPostUpdate, onPostRemoved, onBookmarkChange, isAuthe
       )}
 
       {/* Actions */}
-      <div className='flex items-center justify-between text-gray-600 dark:text-gray-400 text-sm pt-2 border-t border-gray-300 dark:border-gray-600'>
-        <div className='flex items-center gap-4'>
-          <div className='flex items-center gap-1'>
-            <Heart className={`w-4 h-4 cursor-pointer ${isLiked && 'text-red-500 fill-red-500'}`} onClick={handleLike} />
-            <span>{likesCount}</span>
-          </div>
-          <div className='flex items-center gap-1 cursor-pointer hover:text-blue-500' onClick={() => {
-            if (!isAuthenticated) {
-              onAuthPrompt?.('comment')
-              return
-            }
-            setShowComments(true)
-          }}>
-            <MessageCircle className="w-4 h-4" />
-            <span>{commentsCount}</span>
-          </div>
-          <div className={`flex items-center gap-1 cursor-pointer ${isReposted ? 'text-green-500' : 'hover:text-green-500'}`} onClick={handleRepost}>
-            <Share2 className={`w-4 h-4 ${isReposted ? 'fill-green-500' : ''}`} />
-            <span>{sharesCount}</span>
-          </div>
+      <div className='flex items-center justify-between text-gray-600 dark:text-gray-400 text-sm pt-3 border-t border-gray-200 dark:border-gray-700'>
+        <div className='flex items-center gap-1'>
+          {/* Like Button */}
+          <button
+            onClick={handleLike}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-200 cursor-pointer ${
+              isLiked
+                ? 'text-red-500 bg-red-50 dark:bg-red-900/20'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-red-500'
+            }`}
+          >
+            <Heart
+              className={`w-[18px] h-[18px] transition-transform duration-200 ${
+                isLiked ? 'fill-red-500 scale-110' : ''
+              } active:scale-125`}
+            />
+            <span className='font-medium'>{likesCount}</span>
+          </button>
+
+          {/* Comment Button */}
+          <button
+            onClick={() => {
+              if (!isAuthenticated) {
+                onAuthPrompt?.('comment')
+                return
+              }
+              setShowComments(true)
+            }}
+            className='flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-500 transition-all duration-200 cursor-pointer'
+          >
+            <MessageCircle className='w-[18px] h-[18px]' />
+            <span className='font-medium'>{commentsCount}</span>
+          </button>
+
+          {/* Repost Button */}
+          <button
+            onClick={handleRepost}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-200 cursor-pointer ${
+              isReposted
+                ? 'text-green-500 bg-green-50 dark:bg-green-900/20'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-green-500'
+            }`}
+          >
+            <Share2 className={`w-[18px] h-[18px] ${isReposted ? 'fill-green-500' : ''}`} />
+            <span className='font-medium'>{sharesCount}</span>
+          </button>
         </div>
-        <Bookmark
-          className={`w-4 h-4 cursor-pointer ${isBookmarked ? 'text-yellow-500 fill-yellow-500' : 'hover:text-yellow-500'}`}
+
+        {/* Bookmark Button */}
+        <button
           onClick={handleBookmark}
-        />
+          className={`p-2 rounded-full transition-all duration-200 cursor-pointer ${
+            isBookmarked
+              ? 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
+              : 'hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-yellow-500'
+          }`}
+        >
+          <Bookmark className={`w-[18px] h-[18px] ${isBookmarked ? 'fill-yellow-500' : ''}`} />
+        </button>
       </div>
 
       {/* Comments Modal */}

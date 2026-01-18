@@ -116,4 +116,25 @@ export class MessageController {
   ) {
     return this.messageService.deleteChat(user.id, dto.chatWithUserId);
   }
+
+  @Get('requests')
+  async getMessageRequests(@CurrentUser() user: CurrentUserPayload) {
+    return this.messageService.getMessageRequests(user.id);
+  }
+
+  @Post('requests/accept')
+  async acceptMessageRequest(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: { fromUserId: string },
+  ) {
+    return this.messageService.acceptMessageRequest(user.id, dto.fromUserId);
+  }
+
+  @Post('requests/decline')
+  async declineMessageRequest(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: { fromUserId: string },
+  ) {
+    return this.messageService.declineMessageRequest(user.id, dto.fromUserId);
+  }
 }

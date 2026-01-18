@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MessageRepository } from '../repository/message.repository';
@@ -37,6 +37,27 @@ export class MessageService {
       messageType = MessageType.IMAGE;
     }
 
+    // Check if recipient is private and if sender is not following them
+    const recipient = await this.messageRepository.findUserById(dto.toUserId);
+    if (!recipient) {
+      throw new BadRequestException('User not found');
+    }
+
+    // Check if there's an existing accepted conversation
+    const existingConversation = await this.messageRepository.hasAcceptedConversation(userId, dto.toUserId);
+
+    // Determine if this is a message request
+    let isMessageRequest = false;
+    if (recipient.isPrivate && !existingConversation) {
+      // Check if sender is following the recipient or is a connection
+      const isFollowing = await this.messageRepository.isUserFollowing(userId, dto.toUserId);
+      const isConnected = await this.messageRepository.areUsersConnected(userId, dto.toUserId);
+
+      if (!isFollowing && !isConnected) {
+        isMessageRequest = true;
+      }
+    }
+
     const message = await this.messageRepository.create({
       fromUser: { id: userId } as User,
       toUser: { id: dto.toUserId } as User,
@@ -44,20 +65,32 @@ export class MessageService {
       mediaUrl,
       messageType,
       seen: false,
+      isMessageRequest,
+      isRequestAccepted: !isMessageRequest,
     });
 
     // Get full message with relations
     const fullMessage = await this.messageRepository.findById(message.id);
 
     // Send real-time notification via WebSocket
-    this.webSocketService.sendToUser(dto.toUserId, SocketEvent.NEW_MESSAGE, {
-      message: this.formatMessageResponse(fullMessage),
-    });
+    // For message requests, send a different event
+    if (isMessageRequest) {
+      this.webSocketService.sendToUser(dto.toUserId, SocketEvent.MESSAGE_REQUEST, {
+        message: this.formatMessageResponse(fullMessage),
+      });
+    } else {
+      this.webSocketService.sendToUser(dto.toUserId, SocketEvent.NEW_MESSAGE, {
+        message: this.formatMessageResponse(fullMessage),
+      });
+    }
 
     return {
       success: true,
-      message: 'Message sent',
-      data: this.formatMessageResponse(fullMessage),
+      message: isMessageRequest ? 'Message request sent' : 'Message sent',
+      data: {
+        ...this.formatMessageResponse(fullMessage),
+        isMessageRequest,
+      },
     };
   }
 
@@ -97,7 +130,7 @@ export class MessageService {
   }
 
   async getRecentChats(userId: string) {
-    const chats = await this.messageRepository.getRecentChats(userId);
+    const chats = await this.messageRepository.getRecentChatsExcludingRequests(userId);
 
     return {
       success: true,
@@ -116,6 +149,42 @@ export class MessageService {
     };
   }
 
+  async getMessageRequests(userId: string) {
+    const requests = await this.messageRepository.getMessageRequests(userId);
+
+    return {
+      success: true,
+      data: requests.map((req) => ({
+        user: {
+          id: req.user.id,
+          fullName: req.user.fullName,
+          username: req.user.username,
+          profilePicture: req.user.profilePicture,
+        },
+        lastMessage: this.formatMessageResponse(req.lastMessage),
+        messageCount: req.messageCount,
+      })),
+    };
+  }
+
+  async acceptMessageRequest(userId: string, fromUserId: string) {
+    await this.messageRepository.acceptMessageRequest(userId, fromUserId);
+
+    return {
+      success: true,
+      message: 'Message request accepted',
+    };
+  }
+
+  async declineMessageRequest(userId: string, fromUserId: string) {
+    await this.messageRepository.declineMessageRequest(userId, fromUserId);
+
+    return {
+      success: true,
+      message: 'Message request declined',
+    };
+  }
+
   private formatMessageResponse(message: any) {
     return {
       id: message.id,
@@ -123,7 +192,7 @@ export class MessageService {
       mediaUrl: message.mediaUrl,
       messageType: message.messageType,
       seen: message.seen,
-      seenAt: message.seenAt,
+      seenAt: message.seenAt ? new Date(message.seenAt).toISOString() : null,
       fromUser: {
         id: message.fromUser.id,
         fullName: message.fromUser.fullName,
@@ -136,7 +205,8 @@ export class MessageService {
         username: message.toUser.username,
         profilePicture: message.toUser.profilePicture,
       },
-      createdAt: message.createdAt,
+      // Ensure createdAt is always in ISO format with UTC timezone
+      createdAt: message.createdAt ? new Date(message.createdAt).toISOString() : null,
     };
   }
 

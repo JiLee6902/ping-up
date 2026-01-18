@@ -1,5 +1,6 @@
 export enum SocketEvent {
   NEW_MESSAGE = 'newMessage',
+  MESSAGE_REQUEST = 'messageRequest',
   MESSAGE_SEEN = 'messageSeen',
   CONNECTION_REQUEST = 'connectionRequest',
   CONNECTION_ACCEPTED = 'connectionAccepted',

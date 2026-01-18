@@ -52,6 +52,7 @@ export class StoryService {
       backgroundColor: dto.backgroundColor,
       expiresAt,
       viewsCount: 0,
+      likesCount: 0,
     });
 
     // Schedule story deletion after 24 hours
@@ -72,8 +73,8 @@ export class StoryService {
     const stories = await this.storyRepository.getStoriesForUser(userId);
     const myStories = await this.storyRepository.getUserStories(userId);
 
-    // Group stories by user
-    const groupedStories = this.groupStoriesByUser([...myStories, ...stories]);
+    // Group stories by user with view status for current user
+    const groupedStories = this.groupStoriesByUser([...myStories, ...stories], userId);
 
     return {
       success: true,
@@ -109,11 +110,58 @@ export class StoryService {
     };
   }
 
-  private groupStoriesByUser(stories: any[]) {
+  async likeStory(storyId: string, userId: string) {
+    const story = await this.storyRepository.findById(storyId);
+
+    if (!story) {
+      throw new NotFoundException('Story not found');
+    }
+
+    // Can't like your own story
+    if (story.user.id === userId) {
+      throw new ForbiddenException('You cannot like your own story');
+    }
+
+    const result = await this.storyRepository.toggleLike(storyId, userId);
+
+    return {
+      success: true,
+      message: result.liked ? 'Story liked' : 'Story unliked',
+      data: result,
+    };
+  }
+
+  async getStoryLikes(storyId: string, userId: string) {
+    const story = await this.storyRepository.findById(storyId);
+
+    if (!story) {
+      throw new NotFoundException('Story not found');
+    }
+
+    // Only the owner can see who liked their story
+    if (story.user.id !== userId) {
+      throw new ForbiddenException('You can only view likes on your own stories');
+    }
+
+    const likes = await this.storyRepository.getStoryLikes(storyId);
+
+    return {
+      success: true,
+      data: likes.map((user) => ({
+        id: user.id,
+        fullName: user.fullName,
+        username: user.username,
+        profilePicture: user.profilePicture,
+      })),
+    };
+  }
+
+  private groupStoriesByUser(stories: any[], currentUserId: string) {
     const grouped = new Map<string, any>();
 
     for (const story of stories) {
       const storyUserId = story.user.id;
+      const isOwnStory = storyUserId === currentUserId;
 
       if (!grouped.has(storyUserId)) {
         grouped.set(storyUserId, {
@@ -124,16 +172,35 @@ export class StoryService {
             profilePicture: story.user.profilePicture,
           },
           stories: [],
+          hasUnviewedStories: false,
+          isOwner: isOwnStory,
         });
       }
 
-      grouped.get(storyUserId).stories.push(this.formatStoryResponse(story));
+      const formattedStory = this.formatStoryResponse(story, currentUserId);
+      grouped.get(storyUserId).stories.push(formattedStory);
+
+      // Check if current user has viewed this story (only for other users' stories)
+      // Owner's own stories should always show as "viewed" (gray ring)
+      if (!isOwnStory && !formattedStory.isViewed) {
+        grouped.get(storyUserId).hasUnviewedStories = true;
+      }
     }
 
     return Array.from(grouped.values());
   }
 
-  private formatStoryResponse(story: any) {
+  private formatStoryResponse(story: any, currentUserId?: string) {
+    const views = story.views || [];
+    const likes = story.likes || [];
+
+    const isViewed = currentUserId
+      ? views.some((u: any) => u.id === currentUserId)
+      : false;
+    const isLiked = currentUserId
+      ? likes.some((u: any) => u.id === currentUserId)
+      : false;
+
     return {
       id: story.id,
       content: story.content,
@@ -141,6 +208,9 @@ export class StoryService {
       mediaType: story.mediaType,
       backgroundColor: story.backgroundColor,
       viewsCount: story.viewsCount,
+      likesCount: story.likesCount || 0,
+      isViewed,
+      isLiked,
       createdAt: story.createdAt,
       expiresAt: story.expiresAt,
     };

@@ -57,4 +57,15 @@ export class Story extends BaseEntity {
 
   @Column({ name: 'views_count', default: 0 })
   viewsCount: number;
+
+  @ManyToMany(() => User)
+  @JoinTable({
+    name: 'story_likes',
+    joinColumn: { name: 'story_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'user_id', referencedColumnName: 'id' },
+  })
+  likes: User[];
+
+  @Column({ name: 'likes_count', default: 0 })
+  likesCount: number;
 }

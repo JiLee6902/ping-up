@@ -1,4 +1,4 @@
-import { Calendar, MapPin, PenBox, Verified, UserPlus, UserMinus, Clock, Lock, MoreHorizontal, Ban, UserX, Flag } from 'lucide-react'
+import { Calendar, MapPin, PenBox, Verified, UserPlus, UserMinus, Clock, Lock, MoreHorizontal, Ban, UserX, Flag, MessageCircle } from 'lucide-react'
 import moment from 'moment'
 import React, { useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
@@ -152,6 +152,14 @@ const UserProfileInfo = ({ user, posts, profileId, setShowEdit, hasPendingReques
                   {buttonConfig.icon}
                   {buttonConfig.text}
                 </button>
+                {/* Message Button */}
+                <button
+                  onClick={() => navigate(`/messages/${user.id || user._id}`)}
+                  className='flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer bg-blue-500 text-white hover:bg-blue-600'
+                >
+                  <MessageCircle className='w-4 h-4' />
+                  Message
+                </button>
                 {/* More Options Menu */}
                 <div className='relative'>
                   <button
@@ -189,10 +197,12 @@ const UserProfileInfo = ({ user, posts, profileId, setShowEdit, hasPendingReques
           <p className='text-gray-700 text-sm max-w-md mt-4'>{user.bio}</p>
 
           <div className='flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-500 mt-4'>
-            <span className='flex items-center gap-1.5'>
-              <MapPin className='w-4 h-4' />
-              {user.location ? user.location : 'Add location'}
-            </span>
+            {(user.location || isOwnProfile) && (
+              <span className='flex items-center gap-1.5'>
+                <MapPin className='w-4 h-4' />
+                {user.location ? user.location : 'Add location'}
+              </span>
+            )}
             {/* <span className='flex items-center gap-1.5'>
               <Calendar className='w-4 h-4' />
               Joined {moment(user.createdAt).fromNow()}
@@ -204,20 +214,36 @@ const UserProfileInfo = ({ user, posts, profileId, setShowEdit, hasPendingReques
               <span className='sm:text-xl font-bold text-gray-900'>{posts.length}</span>
               <span className='text-xs sm:text-sm text-gray-500 ml-1.5'>Posts</span>
             </div>
-            <div
-              onClick={() => { setFollowersModalTab('followers'); setShowFollowersModal(true); }}
-              className='cursor-pointer hover:opacity-70 transition-opacity'
-            >
-              <span className='sm:text-xl font-bold text-gray-900'>{followersCount}</span>
-              <span className='text-xs sm:text-sm text-gray-500 ml-1.5'>Followers</span>
-            </div>
-            <div
-              onClick={() => { setFollowersModalTab('following'); setShowFollowersModal(true); }}
-              className='cursor-pointer hover:opacity-70 transition-opacity'
-            >
-              <span className='sm:text-xl font-bold text-gray-900'>{followingCount}</span>
-              <span className='text-xs sm:text-sm text-gray-500 ml-1.5'>Following</span>
-            </div>
+            {/* Only allow clicking followers/following if it's own profile, or if account is public, or if following a private account */}
+            {(isOwnProfile || !user.isPrivate || isFollowing) ? (
+              <>
+                <div
+                  onClick={() => { setFollowersModalTab('followers'); setShowFollowersModal(true); }}
+                  className='cursor-pointer hover:opacity-70 transition-opacity'
+                >
+                  <span className='sm:text-xl font-bold text-gray-900'>{followersCount}</span>
+                  <span className='text-xs sm:text-sm text-gray-500 ml-1.5'>Followers</span>
+                </div>
+                <div
+                  onClick={() => { setFollowersModalTab('following'); setShowFollowersModal(true); }}
+                  className='cursor-pointer hover:opacity-70 transition-opacity'
+                >
+                  <span className='sm:text-xl font-bold text-gray-900'>{followingCount}</span>
+                  <span className='text-xs sm:text-sm text-gray-500 ml-1.5'>Following</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className='cursor-default'>
+                  <span className='sm:text-xl font-bold text-gray-900'>{followersCount}</span>
+                  <span className='text-xs sm:text-sm text-gray-500 ml-1.5'>Followers</span>
+                </div>
+                <div className='cursor-default'>
+                  <span className='sm:text-xl font-bold text-gray-900'>{followingCount}</span>
+                  <span className='text-xs sm:text-sm text-gray-500 ml-1.5'>Following</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

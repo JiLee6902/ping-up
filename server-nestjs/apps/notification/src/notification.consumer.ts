@@ -160,7 +160,7 @@ export class NotificationConsumer implements OnModuleInit {
       await this.emailService.sendNewFollowerEmail(
         user.email,
         user.fullName,
-        message.data?.followerName || 'Someone',
+        String(message.data?.followerName || 'Someone'),
       );
     }
   }
@@ -174,8 +174,8 @@ export class NotificationConsumer implements OnModuleInit {
       await this.emailService.sendPostLikedEmail(
         user.email,
         user.fullName,
-        message.data?.likerName || 'Someone',
-        message.data?.postPreview || 'your post',
+        String(message.data?.likerName || 'Someone'),
+        String(message.data?.postPreview || 'your post'),
       );
     }
   }
@@ -189,9 +189,9 @@ export class NotificationConsumer implements OnModuleInit {
       await this.emailService.sendNewCommentEmail(
         user.email,
         user.fullName,
-        message.data?.commenterName || 'Someone',
-        message.data?.commentPreview || 'commented on your post',
-        message.data?.postPreview || 'your post',
+        String(message.data?.commenterName || 'Someone'),
+        String(message.data?.commentPreview || 'commented on your post'),
+        String(message.data?.postPreview || 'your post'),
       );
     }
   }
@@ -205,8 +205,8 @@ export class NotificationConsumer implements OnModuleInit {
       await this.emailService.sendRepostEmail(
         user.email,
         user.fullName,
-        message.data?.reposterName || 'Someone',
-        message.data?.postPreview || 'your post',
+        String(message.data?.reposterName || 'Someone'),
+        String(message.data?.postPreview || 'your post'),
       );
     }
   }
@@ -220,8 +220,8 @@ export class NotificationConsumer implements OnModuleInit {
       await this.emailService.sendMentionEmail(
         user.email,
         user.fullName,
-        message.data?.mentionerName || 'Someone',
-        message.data?.content || '',
+        String(message.data?.mentionerName || 'Someone'),
+        String(message.data?.content || ''),
       );
     }
   }

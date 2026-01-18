@@ -1,14 +1,17 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   X, Camera, Users, UserPlus, Crown, LogOut, Trash2,
-  Edit2, Check, Bell, BellOff, Shield
+  Edit2, Check, Bell, BellOff, Shield, Search, Loader2
 } from 'lucide-react'
-import { useSelector } from 'react-redux'
+import { useSelector, useDispatch } from 'react-redux'
+import { fetchConnections } from '../features/connections/connectionsSlice'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
 
 const GroupSettingsModal = ({ group, currentUser, onClose, onUpdate, onLeave }) => {
-  const { connections } = useSelector((state) => state.connections)
+  const dispatch = useDispatch()
+  const { accessToken } = useSelector((state) => state.auth)
+  const { connections, followers, following } = useSelector((state) => state.connections)
 
   const [activeTab, setActiveTab] = useState('info')
   const [isEditing, setIsEditing] = useState(false)
@@ -19,6 +22,8 @@ const GroupSettingsModal = ({ group, currentUser, onClose, onUpdate, onLeave }) 
   const [showAddMembers, setShowAddMembers] = useState(false)
   const [selectedMembers, setSelectedMembers] = useState([])
   const [isLoading, setIsLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [loadingConnections, setLoadingConnections] = useState(false)
 
   const isAdmin = group?.members?.find(m => m.id === currentUser?.id)?.role === 'admin'
   const isCreator = group?.creatorId === currentUser?.id
@@ -165,12 +170,34 @@ const GroupSettingsModal = ({ group, currentUser, onClose, onUpdate, onLeave }) 
     }
   }
 
-  // Get connections not in group for adding
-  const availableConnections = connections.filter(item => {
-    const user = item.user || item
-    const userId = user.id || user._id
-    return !group?.members?.find(m => m.id === userId)
-  })
+  // Fetch connections when Add Members is opened
+  useEffect(() => {
+    if (showAddMembers) {
+      setLoadingConnections(true)
+      dispatch(fetchConnections(accessToken)).finally(() => setLoadingConnections(false))
+    }
+  }, [showAddMembers, dispatch, accessToken])
+
+  // Compute mutual follows: users who are in BOTH followers AND following
+  const mutualFollows = useMemo(() => {
+    const followerIds = new Set(followers.map(u => u.id || u._id))
+    return following.filter(u => followerIds.has(u.id || u._id))
+  }, [followers, following])
+
+  // Get mutual follows not in group for adding (filtered by search)
+  const availableConnections = useMemo(() => {
+    const available = mutualFollows.filter(user => {
+      const userId = user.id || user._id
+      return !group?.members?.find(m => m.id === userId)
+    })
+    if (!searchQuery.trim()) return available
+    const query = searchQuery.toLowerCase()
+    return available.filter(user => {
+      const fullName = user.fullName || user.full_name || ''
+      const username = user.username || ''
+      return fullName.toLowerCase().includes(query) || username.toLowerCase().includes(query)
+    })
+  }, [mutualFollows, group?.members, searchQuery])
 
   const currentMember = group?.members?.find(m => m.id === currentUser?.id)
   const isMuted = currentMember?.isMuted
@@ -417,18 +444,39 @@ const GroupSettingsModal = ({ group, currentUser, onClose, onUpdate, onLeave }) 
           <div className='absolute inset-0 bg-white dark:bg-gray-800 flex flex-col'>
             <div className='flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700'>
               <h3 className='font-semibold text-gray-900 dark:text-white'>Add Members</h3>
-              <button onClick={() => { setShowAddMembers(false); setSelectedMembers([]) }} className='p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full'>
+              <span className='text-sm text-gray-500'>{selectedMembers.length} selected</span>
+              <button onClick={() => { setShowAddMembers(false); setSelectedMembers([]); setSearchQuery('') }} className='p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full'>
                 <X className='w-5 h-5 text-gray-500' />
               </button>
             </div>
+            {/* Search */}
+            <div className='px-4 pt-3'>
+              <div className='relative'>
+                <Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400' />
+                <input
+                  type="text"
+                  placeholder="Search connections..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className='w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-transparent text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                />
+              </div>
+            </div>
             <div className='flex-1 overflow-y-auto p-4 space-y-2'>
-              {availableConnections.length === 0 ? (
+              {loadingConnections ? (
+                <div className='flex items-center justify-center py-4'>
+                  <Loader2 className='w-6 h-6 text-blue-500 animate-spin' />
+                </div>
+              ) : availableConnections.length === 0 ? (
                 <p className='text-center text-gray-500 dark:text-gray-400 py-4'>
-                  All your connections are already in this group
+                  {mutualFollows.length === 0
+                    ? 'No mutual follows yet. Follow people who follow you back!'
+                    : searchQuery
+                      ? 'No results found'
+                      : 'All your mutual follows are already in this group'}
                 </p>
               ) : (
-                availableConnections.map(item => {
-                  const user = item.user || item
+                availableConnections.map(user => {
                   const userId = user.id || user._id
                   const isSelected = selectedMembers.includes(userId)
 

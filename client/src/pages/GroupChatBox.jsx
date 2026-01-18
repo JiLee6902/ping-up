@@ -139,13 +139,22 @@ const GroupChatBox = () => {
     setIsSending(false)
   }
 
+  // Helper to normalize date string with timezone
+  const normalizeDate = (dateString) => {
+    if (!dateString) return new Date()
+    if (!dateString.endsWith('Z') && !dateString.includes('+') && !dateString.includes('-', 10)) {
+      return new Date(dateString + 'Z')
+    }
+    return new Date(dateString)
+  }
+
   const formatTime = (dateString) => {
-    const date = new Date(dateString)
+    const date = normalizeDate(dateString)
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
   }
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString)
+    const date = normalizeDate(dateString)
     const today = new Date()
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
@@ -161,7 +170,7 @@ const GroupChatBox = () => {
     let currentDate = null
 
     messages.forEach((message) => {
-      const messageDate = new Date(message.createdAt).toDateString()
+      const messageDate = normalizeDate(message.createdAt).toDateString()
       if (messageDate !== currentDate) {
         currentDate = messageDate
         groups.push({ type: 'date', date: message.createdAt })

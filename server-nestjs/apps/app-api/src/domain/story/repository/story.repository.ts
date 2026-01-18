@@ -23,7 +23,7 @@ export class StoryRepository {
   async findById(id: string): Promise<Story | null> {
     return this.storyRepository.findOne({
       where: { id },
-      relations: ['user', 'views'],
+      relations: ['user', 'views', 'likes'],
     });
   }
 
@@ -66,7 +66,7 @@ export class StoryRepository {
         user: { id: In(allUserIds) },
         expiresAt: MoreThan(now),
       },
-      relations: ['user', 'views'],
+      relations: ['user', 'views', 'likes'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -79,7 +79,7 @@ export class StoryRepository {
         user: { id: userId },
         expiresAt: MoreThan(now),
       },
-      relations: ['user', 'views'],
+      relations: ['user', 'views', 'likes'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -103,5 +103,66 @@ export class StoryRepository {
         }
       }
     }
+  }
+
+  async toggleLike(storyId: string, userId: string): Promise<{ liked: boolean; likesCount: number }> {
+    const story = await this.storyRepository.findOne({
+      where: { id: storyId },
+    });
+
+    if (!story) {
+      throw new Error('Story not found');
+    }
+
+    const currentLikesCount = story.likesCount || 0;
+
+    // Check if user already liked using raw query
+    const existingLike = await this.storyRepository
+      .createQueryBuilder()
+      .select('1')
+      .from('story_likes', 'sl')
+      .where('sl.story_id = :storyId', { storyId })
+      .andWhere('sl.user_id = :userId', { userId })
+      .getRawOne();
+
+    if (existingLike) {
+      // Unlike - remove from junction table
+      await this.storyRepository
+        .createQueryBuilder()
+        .delete()
+        .from('story_likes')
+        .where('story_id = :storyId', { storyId })
+        .andWhere('user_id = :userId', { userId })
+        .execute();
+
+      // Update likes count
+      const newCount = Math.max(0, currentLikesCount - 1);
+      await this.storyRepository.update(storyId, { likesCount: newCount });
+
+      return { liked: false, likesCount: newCount };
+    } else {
+      // Like - insert into junction table
+      await this.storyRepository
+        .createQueryBuilder()
+        .insert()
+        .into('story_likes')
+        .values({ story_id: storyId, user_id: userId })
+        .execute();
+
+      // Update likes count
+      const newCount = currentLikesCount + 1;
+      await this.storyRepository.update(storyId, { likesCount: newCount });
+
+      return { liked: true, likesCount: newCount };
+    }
+  }
+
+  async getStoryLikes(storyId: string): Promise<User[]> {
+    const story = await this.storyRepository.findOne({
+      where: { id: storyId },
+      relations: ['likes'],
+    });
+
+    return story?.likes || [];
   }
 }
