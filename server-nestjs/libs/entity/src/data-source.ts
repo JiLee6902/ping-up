@@ -22,7 +22,7 @@ export const dataSourceOptions: DataSourceOptions = {
   entities: [join(__dirname, '/entities/*.entity.{ts,js}')],
   migrations: [join(__dirname, '/migrations/*.{ts,js}')],
   ssl:
-    process.env.NODE_ENV === 'production'
+    process.env.DB_SSL === 'true'
       ? { rejectUnauthorized: false }
       : false,
   extra: {
