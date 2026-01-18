@@ -257,42 +257,6 @@ sudo nginx -t && sudo systemctl reload nginx
 
 Client duoc deploy tren Vercel. Config trong `client/vercel.json`.
 
-## API Documentation
-
-### Auth
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | /api/auth/register | Dang ky |
-| POST | /api/auth/login | Dang nhap |
-| POST | /api/auth/refresh | Refresh token |
-| POST | /api/auth/2fa/setup | Setup 2FA |
-
-### User
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/user/me | Get current user |
-| PUT | /api/user/profile | Update profile |
-| POST | /api/user/follow/:id | Follow user |
-
-### Posts
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/post/feed | Get feed |
-| POST | /api/post | Create post |
-| POST | /api/post/:id/like | Like/unlike |
-
-### Messages
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/message/conversations | Get conversations |
-| POST | /api/message/send | Send message |
-
-### Stories
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/story | Get stories |
-| POST | /api/story | Create story |
-
 ## Architecture
 
 ```
