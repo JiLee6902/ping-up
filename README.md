@@ -28,7 +28,8 @@ PingUp la mot ung dung mang xa hoi day du tinh nang bao gom:
 - **NestJS 10** - Framework
 - **PostgreSQL 15** - Database
 - **TypeORM** - ORM
-- **Redis 7** - Cache & Queue
+- **Redis 7** - Cache & Session
+- **Apache Kafka** - Message broker & Event streaming
 - **Bull** - Job queue
 - **Socket.IO** - WebSocket
 - **JWT + Passport** - Auth
@@ -51,12 +52,12 @@ pingup-full-stack/
 ├── server-nestjs/          # NestJS backend
 │   ├── apps/
 │   │   ├── app-api/       # Main API (port 4000)
-│   │   ├── notification/  # Notification service (port 4001)
+│   │   ├── notification/  # Notification consumer (port 4001)
 │   │   └── cronjob-worker/# Background jobs (port 4002)
 │   ├── libs/
 │   │   ├── entity/        # TypeORM entities
 │   │   ├── enum/          # Shared enums
-│   │   └── external-infra/# Redis, WebSocket, Email
+│   │   └── external-infra/# Redis, Kafka, WebSocket, Email
 │   ├── docker-compose.yml
 │   └── nginx.conf
 │
@@ -69,6 +70,7 @@ pingup-full-stack/
 - Node.js 18+
 - PostgreSQL 15+
 - Redis 7+
+- Apache Kafka 3.5+ (with Zookeeper)
 
 ### 1. Clone repository
 
@@ -85,8 +87,8 @@ cd server-nestjs
 # Install dependencies
 npm install
 
-# Start infrastructure (PostgreSQL, Redis)
-docker-compose up -d postgres redis
+# Start infrastructure (PostgreSQL, Redis, Kafka)
+docker-compose up -d
 
 # Setup environment
 cp .env.example .env.local
@@ -117,7 +119,7 @@ npm run dev
 
 - **Client**: http://localhost:5173
 - **API**: http://localhost:4000
-- **API Docs**: http://localhost:4000/api
+- **Kafka UI**: http://localhost:8080
 
 ## Environment Variables
 
@@ -139,6 +141,11 @@ DB_NAME=pingup
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=
+
+# Kafka
+KAFKA_BROKERS=localhost:9092
+KAFKA_CLIENT_ID=pingup-api
+KAFKA_GROUP_ID=pingup-consumer-group
 
 # JWT
 JWT_SECRET=your-super-secret-key
@@ -169,7 +176,7 @@ npm run lint      # Run ESLint
 ### Server Commands
 ```bash
 npm run start:app-api        # Start API server
-npm run start:notification   # Start notification service
+npm run start:notification   # Start notification consumer
 npm run start:cronjob-worker # Start cron worker
 npm run build                # Build all apps
 npm run migration:run        # Run migrations
@@ -199,7 +206,7 @@ npm run migration:generate   # Generate migration
 - Typing indicators
 
 ### Notifications
-- Push notifications
+- Push notifications (via Kafka)
 - Email notifications
 - In-app notifications
 
@@ -208,6 +215,16 @@ npm run migration:generate   # Generate migration
 - User search
 - Hashtag search
 - Advanced filters
+
+## Kafka Topics
+
+| Topic | Description | Producer | Consumer |
+|-------|-------------|----------|----------|
+| `notification.push` | Push notifications | app-api | notification |
+| `notification.email` | Email notifications | app-api | notification |
+| `user.activity` | User activity events | app-api | cronjob-worker |
+| `post.events` | Post create/update/delete | app-api | notification |
+| `message.events` | Message events | app-api | notification |
 
 ## Production Deployment
 
@@ -285,16 +302,26 @@ Client duoc deploy tren Vercel. Config trong `client/vercel.json`.
 └─────────────┘     │   Proxy)    │     └──────┬──────┘
                     └─────────────┘            │
                                                ▼
-                    ┌─────────────┐     ┌─────────────┐
-                    │  PostgreSQL │◀────│    Redis    │
-                    │  (Database) │     │   (Cache)   │
-                    └─────────────┘     └─────────────┘
-                                               │
-                    ┌─────────────┐     ┌──────┴──────┐
-                    │ Notification│◀────│    Bull     │
-                    │  Service    │     │   (Queue)   │
-                    └─────────────┘     └─────────────┘
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Zookeeper  │────▶│    Kafka    │◀────│    Redis    │
+│             │     │  (Broker)   │     │   (Cache)   │
+└─────────────┘     └──────┬──────┘     └─────────────┘
+                           │
+          ┌────────────────┼────────────────┐
+          ▼                ▼                ▼
+┌─────────────┐     ┌─────────────┐  ┌─────────────┐
+│ Notification│     │   Cronjob   │  │  PostgreSQL │
+│  Consumer   │     │   Worker    │  │  (Database) │
+└─────────────┘     └─────────────┘  └─────────────┘
 ```
+
+### Event-Driven Flow
+
+1. **User Action** → App API receives request
+2. **Produce Event** → App API publishes event to Kafka topic
+3. **Consume Event** → Notification service consumes from Kafka
+4. **Process** → Send push notification / email / store in DB
+5. **Real-time** → Socket.IO broadcasts to connected clients
 
 ## License
 
