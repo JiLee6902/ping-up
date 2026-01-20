@@ -13,13 +13,50 @@ on:
           - cronjob-worker
           - all
           - infrastructure
+          - migrate-only
+      run_migrations:
+        description: 'Run migrations before deploy?'
+        required: false
+        type: boolean
+        default: false
 
 env:
   REGISTRY: ${{ secrets.DOCKER_USERNAME }}
 
 jobs:
+  # Job chỉ chạy migrations
+  migrate-only:
+    if: ${{ github.event.inputs.app == 'migrate-only' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Migrations
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/pingup
+
+            echo "Docker Login..."
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login --username "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+            echo "Running migrations..."
+            docker run --rm \
+              --env-file .env.production \
+              --network pingup_pingup_network \
+              ${{ secrets.DOCKER_USERNAME }}/pingup-app-api:latest \
+              npx ts-node -r tsconfig-paths/register node_modules/typeorm/cli.js migration:run -d libs/entity/src/data-source.ts
+
+            echo "Migrations completed!"
+
+      - name: Summary
+        run: |
+          echo "### Migrations Completed! :rocket:" >> $GITHUB_STEP_SUMMARY
+
   deploy-single:
-    if: ${{ github.event.inputs.app != 'all' && github.event.inputs.app != 'infrastructure' }}
+    if: ${{ github.event.inputs.app != 'all' && github.event.inputs.app != 'infrastructure' && github.event.inputs.app != 'migrate-only' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to EC2
@@ -51,6 +88,17 @@ jobs:
 
             export VERSION="${{ github.sha }}"
             export REGISTRY="${{ env.REGISTRY }}"
+
+            # Run migrations if requested
+            if [ "${{ github.event.inputs.run_migrations }}" = "true" ]; then
+              echo "Running migrations..."
+              docker run --rm \
+                --env-file .env.production \
+                --network pingup_pingup_network \
+                ${{ env.REGISTRY }}/pingup-app-api:${{ github.sha }} \
+                npx ts-node -r tsconfig-paths/register node_modules/typeorm/cli.js migration:run -d libs/entity/src/data-source.ts
+              echo "Migrations completed!"
+            fi
 
             echo "Pulling pingup-${{ github.event.inputs.app }}..."
             docker compose --env-file .env.production -f docker-compose.prod.yml pull ${{ github.event.inputs.app }}
