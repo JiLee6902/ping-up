@@ -48,14 +48,13 @@ jobs:
           context: ./server-nestjs
           file: ./server-nestjs/Dockerfile
           push: true
+          no-cache: true
           build-args: |
             APP_NAME=${{ github.event.inputs.app }}
             APP_PORT=${{ steps.set-port.outputs.port }}
           tags: |
             ${{ env.REGISTRY }}/pingup-${{ github.event.inputs.app }}:${{ github.sha }}
             ${{ env.REGISTRY }}/pingup-${{ github.event.inputs.app }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Summary
         run: |
@@ -96,14 +95,13 @@ jobs:
           context: ./server-nestjs
           file: ./server-nestjs/Dockerfile
           push: true
+          no-cache: true
           build-args: |
             APP_NAME=${{ matrix.app }}
             APP_PORT=${{ matrix.port }}
           tags: |
             ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}
             ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Summary
         run: |
