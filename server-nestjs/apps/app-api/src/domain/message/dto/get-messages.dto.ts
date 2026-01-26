@@ -1,7 +1,7 @@
 import { IsUUID, IsOptional, IsNumber, Max } from 'class-validator';
 
 export class GetMessagesDto {
-  @IsUUID()
+  @IsUUID("all")
   userId: string;
 
   @IsOptional()

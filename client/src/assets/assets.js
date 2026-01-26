@@ -2,7 +2,7 @@ import sample_cover from './sample_cover.jpg'
 import sample_profile from './sample_profile.jpg'
 import bgImage from './bgImage.svg'
 import group_users from './group_users.png'
-import { Home, MessageCircle, Search, UserIcon, Users, Bell, Bookmark, UsersRound } from 'lucide-react'
+import { Home, MessageCircle, Search, UserIcon, Users, Bell, Bookmark, UsersRound, Wallet } from 'lucide-react'
 import sponsored_img from './sponsored_img.png'
 import logo from './logo.svg'
 
@@ -23,6 +23,7 @@ export const menuItemsData = [
     { to: '/connections', label: 'Connections', Icon: Users },
     { to: '/discover', label: 'Discover', Icon: Search },
     { to: '/saved', label: 'Saved', Icon: Bookmark },
+    { to: '/wallet', label: 'Wallet', Icon: Wallet },
     { to: '/profile', label: 'Profile', Icon: UserIcon },
 ];
 

@@ -3,12 +3,14 @@ import {
   Column,
   ManyToOne,
   ManyToMany,
+  OneToOne,
   JoinColumn,
   JoinTable,
   Index,
 } from 'typeorm';
 import { BaseEntity } from './base.entity';
 import { User } from './user.entity';
+import { Poll } from './poll.entity';
 
 export enum PostType {
   TEXT = 'text',
@@ -17,6 +19,7 @@ export enum PostType {
   VIDEO = 'video',
   TEXT_WITH_VIDEO = 'text_with_video',
   REPOST = 'repost',
+  POLL = 'poll',
 }
 
 @Entity('posts')
@@ -79,4 +82,10 @@ export class Post extends BaseEntity {
 
   @Column({ name: 'video_url', nullable: true })
   videoUrl?: string;
+
+  @Column({ name: 'reactions_count', type: 'jsonb', default: '{}' })
+  reactionsCount: Record<string, number>;
+
+  @OneToOne(() => Poll, (poll) => poll.post)
+  poll?: Poll;
 }

@@ -17,7 +17,7 @@ const Messages = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searchLoading, setSearchLoading] = useState(false)
-  const { isUserOnline, fetchOnlineStatus } = useSocket()
+  const { isUserOnline, fetchOnlineStatus, isUserTyping } = useSocket()
 
   useEffect(() => {
     fetchRecentChats()
@@ -278,6 +278,7 @@ const Messages = () => {
                 const lastMessage = chatItem.lastMessage
                 const unseenCount = chatItem.unseenCount || 0
                 const isOnline = isUserOnline(oduserId)
+                const isTyping = isUserTyping(oduserId)
 
                 return (
                   <div
@@ -294,7 +295,16 @@ const Messages = () => {
                         {fullName}
                       </p>
                       <p className={`text-sm truncate ${unseenCount > 0 ? 'text-slate-800 dark:text-gray-200 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-                        {lastMessage ? (
+                        {isTyping ? (
+                          <span className='text-blue-500 font-medium flex items-center gap-1'>
+                            <span className="flex gap-0.5">
+                              <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </span>
+                            typing...
+                          </span>
+                        ) : lastMessage ? (
                           <>
                             {lastMessage.fromUser?.id !== oduserId && 'Bạn: '}
                             {lastMessage.text || (lastMessage.messageType === 'image' ? '📷 Ảnh' : '')}

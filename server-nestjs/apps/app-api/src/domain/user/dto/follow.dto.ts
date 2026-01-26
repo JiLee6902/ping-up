@@ -1,6 +1,6 @@
 import { IsUUID } from 'class-validator';
 
 export class FollowDto {
-  @IsUUID()
+  @IsUUID("all")
   userId: string;
 }

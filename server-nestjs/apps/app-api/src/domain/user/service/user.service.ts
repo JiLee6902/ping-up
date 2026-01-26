@@ -786,4 +786,77 @@ export class UserService {
       })),
     };
   }
+
+  // Mute user methods
+  async muteUser(userId: string, targetUserId: string, duration?: number) {
+    if (userId === targetUserId) {
+      throw new BadRequestException('Cannot mute yourself');
+    }
+
+    const targetUser = await this.userRepository.findById(targetUserId);
+    if (!targetUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if already muted
+    const isAlreadyMuted = await this.userRepository.isMuted(userId, targetUserId);
+    if (isAlreadyMuted) {
+      throw new BadRequestException('User is already muted');
+    }
+
+    // Calculate mute expiration if duration provided (in hours)
+    let muteUntil: Date | undefined;
+    if (duration && duration > 0) {
+      muteUntil = new Date(Date.now() + duration * 60 * 60 * 1000);
+    }
+
+    await this.userRepository.muteUser(userId, targetUserId, muteUntil);
+
+    return {
+      success: true,
+      message: muteUntil
+        ? `User muted for ${duration} hours`
+        : 'User muted permanently',
+    };
+  }
+
+  async unmuteUser(userId: string, targetUserId: string) {
+    if (userId === targetUserId) {
+      throw new BadRequestException('Cannot unmute yourself');
+    }
+
+    const isMuted = await this.userRepository.isMuted(userId, targetUserId);
+    if (!isMuted) {
+      throw new BadRequestException('User is not muted');
+    }
+
+    await this.userRepository.unmuteUser(userId, targetUserId);
+
+    return {
+      success: true,
+      message: 'User unmuted successfully',
+    };
+  }
+
+  async getMutedUsers(userId: string) {
+    const mutedUsers = await this.userRepository.getMutedUsers(userId);
+
+    return {
+      success: true,
+      data: mutedUsers.map((u) => this.formatUserResponse(u)),
+    };
+  }
+
+  async isMuted(userId: string, targetUserId: string) {
+    const isMuted = await this.userRepository.isMuted(userId, targetUserId);
+
+    return {
+      success: true,
+      data: { isMuted },
+    };
+  }
+
+  async getMutedUserIds(userId: string): Promise<string[]> {
+    return this.userRepository.getMutedUserIds(userId);
+  }
 }

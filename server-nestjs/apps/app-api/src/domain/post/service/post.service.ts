@@ -3,8 +3,9 @@ import { PostRepository } from '../repository/post.repository';
 import { UploadService } from '../../upload/service/upload.service';
 import { WebSocketService } from '@app/external-infra/websocket';
 import { NotificationService } from '../../notification/service/notification.service';
-import { CreatePostDto, LikePostDto, RepostDto, AdvancedSearchDto } from '../dto';
-import { PostType } from '@app/enum';
+import { UserService } from '../../user/service/user.service';
+import { CreatePostDto, LikePostDto, RepostDto, AdvancedSearchDto, ReactPostDto, VotePollDto } from '../dto';
+import { PostType, ReactionType } from '@app/enum';
 import { User } from '@app/entity';
 
 const MAX_IMAGES_PER_POST = 4;
@@ -19,6 +20,8 @@ export class PostService {
     private readonly webSocketService: WebSocketService,
     @Inject(forwardRef(() => NotificationService))
     private readonly notificationService: NotificationService,
+    @Inject(forwardRef(() => UserService))
+    private readonly userService: UserService,
   ) {}
 
   async addPost(
@@ -27,13 +30,21 @@ export class PostService {
     files?: Express.Multer.File[],
     videoFile?: Express.Multer.File,
   ) {
-    if (!dto.content && (!files || files.length === 0) && !videoFile) {
-      throw new BadRequestException('Post must have content, images, or video');
+    // Poll posts only require poll data
+    const hasPoll = dto.poll && dto.poll.question && dto.poll.options?.length >= 2;
+
+    if (!dto.content && (!files || files.length === 0) && !videoFile && !hasPoll) {
+      throw new BadRequestException('Post must have content, images, video, or poll');
     }
 
     // Cannot have both images and video in the same post
     if (files && files.length > 0 && videoFile) {
       throw new BadRequestException('Cannot have both images and video in the same post');
+    }
+
+    // Poll posts cannot have images or video
+    if (hasPoll && ((files && files.length > 0) || videoFile)) {
+      throw new BadRequestException('Poll posts cannot have images or video');
     }
 
     if (files && files.length > MAX_IMAGES_PER_POST) {
@@ -69,7 +80,9 @@ export class PostService {
     // Determine post type
     let postType = dto.postType;
     if (!postType) {
-      if (videoUrl) {
+      if (hasPoll) {
+        postType = PostType.POLL;
+      } else if (videoUrl) {
         postType = dto.content ? PostType.TEXT_WITH_VIDEO : PostType.VIDEO;
       } else if (dto.content && imageUrls.length > 0) {
         postType = PostType.TEXT_WITH_IMAGE;
@@ -92,10 +105,36 @@ export class PostService {
       locationLng: dto.locationLng,
     });
 
+    // Create poll if provided
+    let poll = null;
+    if (hasPoll && dto.poll) {
+      const endsAt = dto.poll.endsAt ? new Date(dto.poll.endsAt) : undefined;
+      poll = await this.postRepository.createPoll(
+        post.id,
+        dto.poll.question,
+        dto.poll.options,
+        endsAt,
+        dto.poll.isMultipleChoice || false,
+      );
+    }
+
+    const response = this.formatPostResponse(post, userId);
+    if (poll) {
+      response.poll = {
+        id: poll.id,
+        question: poll.question,
+        options: poll.options,
+        totalVotes: poll.totalVotes,
+        endsAt: poll.endsAt,
+        isMultipleChoice: poll.isMultipleChoice,
+        userVotes: [],
+      };
+    }
+
     return {
       success: true,
       message: 'Post created successfully',
-      data: this.formatPostResponse(post, userId),
+      data: response,
     };
   }
 
@@ -103,7 +142,10 @@ export class PostService {
     const parsedLimit = limit ? parseInt(String(limit), 10) : 50;
     const parsedOffset = offset ? parseInt(String(offset), 10) : 0;
 
-    const posts = await this.postRepository.getFeedPosts(userId, parsedLimit, parsedOffset);
+    // Get muted user IDs to exclude from feed
+    const mutedUserIds = await this.userService.getMutedUserIds(userId);
+
+    const posts = await this.postRepository.getFeedPosts(userId, parsedLimit, parsedOffset, mutedUserIds);
 
     // Get repost status for all original posts in feed
     const originalPostIds = posts
@@ -436,6 +478,7 @@ export class PostService {
       likesCount: post.likesCount,
       commentsCount: post.commentsCount || 0,
       sharesCount: post.sharesCount || 0,
+      reactionsCount: post.reactionsCount || {},
       isLiked,
       isReposted,
       isBookmarked,
@@ -550,6 +593,147 @@ export class PostService {
     return {
       success: true,
       data: suggestions,
+    };
+  }
+
+  // Reaction methods
+  async reactToPost(userId: string, dto: ReactPostDto) {
+    const post = await this.postRepository.findById(dto.postId);
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const { reaction, isNew, previousReaction } = await this.postRepository.setReaction(
+      dto.postId,
+      userId,
+      dto.reactionType,
+    );
+
+    // If same reaction was clicked (toggle off), return removed status
+    if (!isNew && previousReaction === dto.reactionType) {
+      return {
+        success: true,
+        message: 'Reaction removed',
+        data: {
+          postId: dto.postId,
+          reactionType: null,
+          reactionsCount: reaction.post.reactionsCount,
+          likesCount: reaction.post.likesCount,
+        },
+      };
+    }
+
+    // Create notification for new reactions (not when changing or removing)
+    // Use like notification for reactions since behavior is similar
+    if (isNew && reaction.post.user.id !== userId) {
+      // Get actor name for notification
+      const actorUser = await this.userService.getUserData(userId);
+      const actorName = actorUser?.data?.fullName || 'Someone';
+      this.notificationService.createLikeNotification(
+        reaction.post.user.id,
+        userId,
+        dto.postId,
+        actorName,
+      );
+    }
+
+    return {
+      success: true,
+      message: isNew ? 'Reaction added' : 'Reaction updated',
+      data: {
+        postId: dto.postId,
+        reactionType: dto.reactionType,
+        reactionsCount: reaction.post.reactionsCount,
+        likesCount: reaction.post.likesCount,
+      },
+    };
+  }
+
+  async removeReaction(userId: string, postId: string) {
+    const post = await this.postRepository.findById(postId);
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const removed = await this.postRepository.removeReaction(postId, userId);
+
+    if (!removed) {
+      throw new BadRequestException('No reaction to remove');
+    }
+
+    // Get updated post
+    const updatedPost = await this.postRepository.findById(postId);
+
+    return {
+      success: true,
+      message: 'Reaction removed',
+      data: {
+        postId,
+        reactionType: null,
+        reactionsCount: updatedPost?.reactionsCount || {},
+        likesCount: updatedPost?.likesCount || 0,
+      },
+    };
+  }
+
+  async getUserReaction(userId: string, postId: string) {
+    const reactionType = await this.postRepository.getUserReactionForPost(postId, userId);
+    return {
+      success: true,
+      data: { reactionType },
+    };
+  }
+
+  // Poll methods
+  async votePoll(userId: string, dto: VotePollDto) {
+    try {
+      const { poll, isNewVote } = await this.postRepository.votePoll(
+        dto.pollId,
+        userId,
+        dto.optionId,
+      );
+
+      const userVotes = await this.postRepository.getUserVotesForPoll(dto.pollId, userId);
+
+      return {
+        success: true,
+        message: isNewVote ? 'Vote recorded' : 'Vote removed',
+        data: {
+          pollId: poll.id,
+          options: poll.options,
+          totalVotes: poll.totalVotes,
+          userVotes,
+        },
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+  }
+
+  async getPollByPost(userId: string, postId: string) {
+    const poll = await this.postRepository.getPollByPostId(postId);
+
+    if (!poll) {
+      throw new NotFoundException('Poll not found');
+    }
+
+    const userVotes = await this.postRepository.getUserVotesForPoll(poll.id, userId);
+
+    return {
+      success: true,
+      data: {
+        id: poll.id,
+        question: poll.question,
+        options: poll.options,
+        totalVotes: poll.totalVotes,
+        endsAt: poll.endsAt,
+        isMultipleChoice: poll.isMultipleChoice,
+        userVotes,
+        isExpired: poll.endsAt ? new Date() > poll.endsAt : false,
+      },
     };
   }
 }

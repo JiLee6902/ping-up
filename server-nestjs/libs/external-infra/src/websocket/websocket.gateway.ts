@@ -130,4 +130,27 @@ export class WebSocketGatewayService
     });
     this.logger.debug(`Call rejected by ${client.handshake.query.userId}`);
   }
+
+  // Typing Indicators
+  @SubscribeMessage('typing')
+  handleTyping(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { toUserId: string },
+  ) {
+    const fromUserId = client.handshake.query.userId as string;
+    this.webSocketService.sendToUser(data.toUserId, 'typing' as any, {
+      fromUserId,
+    });
+  }
+
+  @SubscribeMessage('stopTyping')
+  handleStopTyping(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { toUserId: string },
+  ) {
+    const fromUserId = client.handshake.query.userId as string;
+    this.webSocketService.sendToUser(data.toUserId, 'stopTyping' as any, {
+      fromUserId,
+    });
+  }
 }

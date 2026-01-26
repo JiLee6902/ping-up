@@ -1,7 +1,7 @@
 import { IsNotEmpty, IsString, IsUUID, MaxLength, IsOptional } from 'class-validator';
 
 export class CreateCommentDto {
-  @IsUUID()
+  @IsUUID("all")
   @IsNotEmpty()
   postId: string;
 
@@ -10,7 +10,7 @@ export class CreateCommentDto {
   @MaxLength(500)
   content: string;
 
-  @IsUUID()
+  @IsUUID("all")
   @IsOptional()
   parentId?: string;
 }

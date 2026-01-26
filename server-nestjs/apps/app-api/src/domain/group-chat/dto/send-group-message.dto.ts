@@ -2,7 +2,7 @@ import { IsString, IsOptional, IsUUID, IsEnum, MaxLength } from 'class-validator
 import { GroupMessageType } from '@app/entity';
 
 export class SendGroupMessageDto {
-  @IsUUID()
+  @IsUUID("all")
   groupId: string;
 
   @IsString()

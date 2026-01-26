@@ -227,4 +227,34 @@ export class UserController {
   ) {
     return this.userService.getFollowingList(user.id, targetUserId, search);
   }
+
+  @Post('mute')
+  async muteUser(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body('userId') targetUserId: string,
+    @Body('duration') duration?: number,
+  ) {
+    return this.userService.muteUser(user.id, targetUserId, duration);
+  }
+
+  @Post('unmute')
+  async unmuteUser(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body('userId') targetUserId: string,
+  ) {
+    return this.userService.unmuteUser(user.id, targetUserId);
+  }
+
+  @Get('muted')
+  async getMutedUsers(@CurrentUser() user: CurrentUserPayload) {
+    return this.userService.getMutedUsers(user.id);
+  }
+
+  @Post('check-muted')
+  async checkMuted(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body('userId') targetUserId: string,
+  ) {
+    return this.userService.isMuted(user.id, targetUserId);
+  }
 }

@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react'
-import { BadgeCheck, Heart, MessageCircle, Share2, Repeat2, MoreHorizontal, Trash2, Edit2, X, Link2, Bookmark, ImagePlus, Flag, MapPin } from 'lucide-react'
+import React, { useState, useRef, useEffect } from 'react'
+import { BadgeCheck, Heart, MessageCircle, Share2, Repeat2, MoreHorizontal, Trash2, Edit2, X, Link2, Bookmark, ImagePlus, Flag, MapPin, BarChart2, Check } from 'lucide-react'
 import moment from 'moment'
 import { useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import CommentsModal from './CommentsModal'
 import ReportModal from './ReportModal'
 import ImageLightbox from './ImageLightbox'
+import ReactionPicker from './ReactionPicker'
 
 const PostCard = ({ post, onPostUpdate, onPostRemoved, onBookmarkChange, isAuthenticated = true, onAuthPrompt }) => {
   const navigate = useNavigate()
@@ -76,6 +77,8 @@ const PostCard = ({ post, onPostUpdate, onPostRemoved, onBookmarkChange, isAuthe
 
   const [likesCount, setLikesCount] = useState(post.likesCount ?? post.likes_count ?? 0)
   const [isLiked, setIsLiked] = useState(post.isLiked ?? false)
+  const [currentReaction, setCurrentReaction] = useState(post.userReaction ?? (post.isLiked ? 'heart' : null))
+  const [reactionsCount, setReactionsCount] = useState(post.reactionsCount ?? {})
   const [commentsCount, setCommentsCount] = useState(post.commentsCount ?? post.comments_count ?? 0)
   const [sharesCount, setSharesCount] = useState(post.sharesCount ?? post.shares_count ?? 0)
   const [isReposted, setIsReposted] = useState(post.isReposted ?? false)
@@ -93,8 +96,13 @@ const PostCard = ({ post, onPostUpdate, onPostRemoved, onBookmarkChange, isAuthe
   const [showReportModal, setShowReportModal] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
+  const [poll, setPoll] = useState(post.poll || null)
+  const [userVotes, setUserVotes] = useState(post.poll?.userVotes || [])
+  const [isVoting, setIsVoting] = useState(false)
   const editFileInputRef = useRef(null)
   const currentUser = useSelector((state) => state.user.value)
+
+  const isPollPost = postType === 'poll'
 
   const isOwnPost = currentUser?.id === postUserId || currentUser?._id === postUserId
 
@@ -113,6 +121,26 @@ const PostCard = ({ post, onPostUpdate, onPostRemoved, onBookmarkChange, isAuthe
         setIsLiked(responseData.isLiked ?? !isLiked)
       } else {
         toast(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
+  const handleReaction = async (reactionType) => {
+    if (!isAuthenticated) {
+      onAuthPrompt?.('react')
+      return
+    }
+    try {
+      const { data } = await api.post(`/api/post/react`, { postId, reactionType })
+
+      if (data.success) {
+        const responseData = data.data || data
+        setLikesCount(responseData.likesCount ?? likesCount)
+        setReactionsCount(responseData.reactionsCount ?? reactionsCount)
+        setCurrentReaction(responseData.reactionType)
+        setIsLiked(!!responseData.reactionType)
       }
     } catch (error) {
       toast.error(error.message)
@@ -278,6 +306,60 @@ const PostCard = ({ post, onPostUpdate, onPostRemoved, onBookmarkChange, isAuthe
   const handleCommentAdded = () => {
     setCommentsCount(prev => prev + 1)
   }
+
+  // Fetch poll data if it's a poll post
+  useEffect(() => {
+    const fetchPoll = async () => {
+      if (isPollPost && !poll) {
+        try {
+          const { data } = await api.get(`/api/post/poll/${postId}`)
+          if (data.success) {
+            setPoll(data.data)
+            setUserVotes(data.data.userVotes || [])
+          }
+        } catch (error) {
+          console.error('Failed to fetch poll:', error)
+        }
+      }
+    }
+    fetchPoll()
+  }, [isPollPost, postId, poll])
+
+  const handleVote = async (optionId) => {
+    if (!isAuthenticated) {
+      onAuthPrompt?.('vote')
+      return
+    }
+    if (!poll || isVoting) return
+
+    // Check if poll has ended
+    if (poll.endsAt && new Date() > new Date(poll.endsAt)) {
+      toast.error('This poll has ended')
+      return
+    }
+
+    setIsVoting(true)
+    try {
+      const { data } = await api.post('/api/post/poll/vote', {
+        pollId: poll.id,
+        optionId,
+      })
+      if (data.success) {
+        setPoll(prev => ({
+          ...prev,
+          options: data.data.options,
+          totalVotes: data.data.totalVotes,
+        }))
+        setUserVotes(data.data.userVotes)
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to vote')
+    }
+    setIsVoting(false)
+  }
+
+  const isPollExpired = poll?.endsAt && new Date() > new Date(poll.endsAt)
+  const hasVoted = userVotes.length > 0
 
   // Render the actual post content (used for both original and reposted content)
   const renderPostContent = (postData, isEmbedded = false) => {
@@ -466,28 +548,90 @@ const PostCard = ({ post, onPostUpdate, onPostRemoved, onBookmarkChange, isAuthe
               />
             </div>
           )}
+
+          {/* Poll */}
+          {isPollPost && poll && (
+            <div className='mt-3 space-y-2'>
+              <h4 className='font-medium text-gray-900 dark:text-white flex items-center gap-2'>
+                <BarChart2 className='w-4 h-4 text-blue-500' />
+                {poll.question}
+              </h4>
+              <div className='space-y-2'>
+                {poll.options.map((option) => {
+                  const percentage = poll.totalVotes > 0
+                    ? Math.round((option.votes / poll.totalVotes) * 100)
+                    : 0
+                  const isSelected = userVotes.includes(option.id)
+                  const showResults = hasVoted || isPollExpired
+
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => !showResults && handleVote(option.id)}
+                      disabled={isVoting || isPollExpired}
+                      className={`w-full relative overflow-hidden rounded-lg border transition-all ${
+                        showResults
+                          ? 'border-gray-200 dark:border-gray-600 cursor-default'
+                          : 'border-blue-300 dark:border-blue-700 hover:border-blue-500 cursor-pointer'
+                      } ${isSelected ? 'border-blue-500 dark:border-blue-500' : ''}`}
+                    >
+                      {/* Progress bar background */}
+                      {showResults && (
+                        <div
+                          className={`absolute inset-0 transition-all duration-500 ${
+                            isSelected
+                              ? 'bg-blue-100 dark:bg-blue-900/30'
+                              : 'bg-gray-100 dark:bg-gray-700/50'
+                          }`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      )}
+                      <div className='relative flex items-center justify-between p-3'>
+                        <div className='flex items-center gap-2'>
+                          {isSelected && (
+                            <Check className='w-4 h-4 text-blue-500' />
+                          )}
+                          <span className={`text-sm ${isSelected ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                            {option.text}
+                          </span>
+                        </div>
+                        {showResults && (
+                          <span className='text-sm font-medium text-gray-600 dark:text-gray-400'>
+                            {percentage}%
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              <div className='flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-1'>
+                <span>{poll.totalVotes} {poll.totalVotes === 1 ? 'vote' : 'votes'}</span>
+                {poll.endsAt && (
+                  <span>
+                    {isPollExpired
+                      ? 'Poll ended'
+                      : `Ends ${moment(poll.endsAt).fromNow()}`}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </>
       )}
 
       {/* Actions */}
       <div className='flex items-center justify-between text-gray-600 dark:text-gray-400 text-sm pt-3 border-t border-gray-200 dark:border-gray-700'>
         <div className='flex items-center gap-1'>
-          {/* Like Button */}
-          <button
-            onClick={handleLike}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-200 cursor-pointer ${
-              isLiked
-                ? 'text-red-500 bg-red-50 dark:bg-red-900/20'
-                : 'hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-red-500'
-            }`}
-          >
-            <Heart
-              className={`w-[18px] h-[18px] transition-transform duration-200 ${
-                isLiked ? 'fill-red-500 scale-110' : ''
-              } active:scale-125`}
+          {/* Reaction Button */}
+          <div className='flex items-center gap-1'>
+            <ReactionPicker
+              currentReaction={currentReaction}
+              onReact={handleReaction}
+              disabled={!isAuthenticated}
             />
-            <span className='font-medium'>{likesCount}</span>
-          </button>
+            <span className='font-medium text-gray-600 dark:text-gray-400'>{likesCount}</span>
+          </div>
 
           {/* Comment Button */}
           <button

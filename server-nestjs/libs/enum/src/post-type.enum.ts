@@ -5,4 +5,5 @@ export enum PostType {
   VIDEO = 'video',
   TEXT_WITH_VIDEO = 'text_with_video',
   REPOST = 'repost',
+  POLL = 'poll',
 }
