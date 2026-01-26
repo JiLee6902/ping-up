@@ -1,7 +1,7 @@
 import { IsUUID, IsOptional, IsString, IsBoolean, MaxLength } from 'class-validator';
 
 export class UpdateChatSettingsDto {
-  @IsUUID()
+  @IsUUID("all")
   chatWithUserId: string;
 
   @IsOptional()
@@ -33,6 +33,6 @@ export class UpdateChatSettingsDto {
 }
 
 export class GetChatSettingsDto {
-  @IsUUID()
+  @IsUUID("all")
   chatWithUserId: string;
 }

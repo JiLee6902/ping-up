@@ -2,7 +2,7 @@ import { IsUUID, IsOptional, IsNumber, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class GetGroupMessagesDto {
-  @IsUUID()
+  @IsUUID("all")
   groupId: string;
 
   @IsOptional()

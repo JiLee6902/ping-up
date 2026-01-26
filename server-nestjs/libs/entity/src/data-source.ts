@@ -20,6 +20,16 @@ import {
   GroupChat,
   GroupMember,
   GroupMessage,
+  MutedUser,
+  Reaction,
+  Poll,
+  PollVote,
+  UserWallet,
+  CoinTransaction,
+  PaymentOrder,
+  Subscription,
+  ProfileView,
+  ScheduledPost,
 } from './entities';
 
 // Load env file based on NODE_ENV
@@ -48,6 +58,16 @@ const entities = [
   GroupChat,
   GroupMember,
   GroupMessage,
+  MutedUser,
+  Reaction,
+  Poll,
+  PollVote,
+  UserWallet,
+  CoinTransaction,
+  PaymentOrder,
+  Subscription,
+  ProfileView,
+  ScheduledPost,
 ];
 
 export const dataSourceOptions: DataSourceOptions = {

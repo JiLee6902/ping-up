@@ -2,7 +2,7 @@ import { IsString, IsUUID, IsOptional, IsEnum, MaxLength } from 'class-validator
 import { MessageType } from '@app/enum';
 
 export class SendMessageDto {
-  @IsUUID()
+  @IsUUID("all")
   toUserId: string;
 
   @IsOptional()

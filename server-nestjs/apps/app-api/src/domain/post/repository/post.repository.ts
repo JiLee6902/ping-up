@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { Post, User, Connection, Bookmark } from '@app/entity';
-import { ConnectionStatus, PostType } from '@app/enum';
+import { Post, User, Connection, Bookmark, Reaction, Poll, PollVote, PollOption } from '@app/entity';
+import { ConnectionStatus, PostType, ReactionType } from '@app/enum';
 import { AdvancedSearchDto, SortBy, SortOrder, MediaFilter } from '../dto';
 import { RedisLikeService } from '@app/external-infra/redis';
 
@@ -17,6 +17,12 @@ export class PostRepository {
     private readonly connectionRepository: Repository<Connection>,
     @InjectRepository(Bookmark)
     private readonly bookmarkRepository: Repository<Bookmark>,
+    @InjectRepository(Reaction)
+    private readonly reactionRepository: Repository<Reaction>,
+    @InjectRepository(Poll)
+    private readonly pollRepository: Repository<Poll>,
+    @InjectRepository(PollVote)
+    private readonly pollVoteRepository: Repository<PollVote>,
     private readonly redisLikeService: RedisLikeService,
   ) {}
 
@@ -32,7 +38,7 @@ export class PostRepository {
     });
   }
 
-  async getFeedPosts(userId: string, limit = 50, offset = 0): Promise<Post[]> {
+  async getFeedPosts(userId: string, limit = 50, offset = 0, excludeUserIds: string[] = []): Promise<Post[]> {
     // Get user's following
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -52,8 +58,14 @@ export class PostRepository {
       c.fromUser.id === userId ? c.toUser.id : c.fromUser.id,
     );
 
-    // Combine all IDs (user + following + connections)
-    const allUserIds = [...new Set([userId, ...followingIds, ...connectionIds])];
+    // Combine all IDs (user + following + connections), excluding muted/blocked users
+    const excludeSet = new Set(excludeUserIds);
+    const allUserIds = [...new Set([userId, ...followingIds, ...connectionIds])]
+      .filter((id) => !excludeSet.has(id));
+
+    if (allUserIds.length === 0) {
+      return [];
+    }
 
     return this.postRepository.find({
       where: { user: { id: In(allUserIds) } },
@@ -508,5 +520,315 @@ export class PostRepository {
         profilePicture: u.profilePicture || '',
       })),
     };
+  }
+
+  // Reaction methods
+  async setReaction(
+    postId: string,
+    userId: string,
+    reactionType: ReactionType,
+  ): Promise<{ reaction: Reaction; isNew: boolean; previousReaction?: ReactionType }> {
+    const post = await this.postRepository.findOne({
+      where: { id: postId },
+      relations: ['user'],
+    });
+
+    if (!post) {
+      throw new Error('Post not found');
+    }
+
+    // Check for existing reaction
+    const existingReaction = await this.reactionRepository.findOne({
+      where: { postId, userId },
+    });
+
+    let isNew = true;
+    let previousReaction: ReactionType | undefined;
+
+    if (existingReaction) {
+      previousReaction = existingReaction.reactionType;
+      if (existingReaction.reactionType === reactionType) {
+        // Same reaction - remove it (toggle off)
+        await this.reactionRepository.delete(existingReaction.id);
+
+        // Update reactions count
+        const reactionsCount = { ...post.reactionsCount };
+        if (reactionsCount[reactionType]) {
+          reactionsCount[reactionType] = Math.max(0, reactionsCount[reactionType] - 1);
+          if (reactionsCount[reactionType] === 0) {
+            delete reactionsCount[reactionType];
+          }
+        }
+        post.reactionsCount = reactionsCount;
+        post.likesCount = Math.max(0, post.likesCount - 1);
+        await this.postRepository.save(post);
+
+        return { reaction: existingReaction, isNew: false, previousReaction };
+      } else {
+        // Different reaction - update it
+        existingReaction.reactionType = reactionType;
+        await this.reactionRepository.save(existingReaction);
+        isNew = false;
+
+        // Update reactions count
+        const reactionsCount = { ...post.reactionsCount };
+        // Decrease old reaction count
+        if (reactionsCount[previousReaction]) {
+          reactionsCount[previousReaction] = Math.max(0, reactionsCount[previousReaction] - 1);
+          if (reactionsCount[previousReaction] === 0) {
+            delete reactionsCount[previousReaction];
+          }
+        }
+        // Increase new reaction count
+        reactionsCount[reactionType] = (reactionsCount[reactionType] || 0) + 1;
+        post.reactionsCount = reactionsCount;
+        await this.postRepository.save(post);
+
+        existingReaction.post = post;
+        return { reaction: existingReaction, isNew: false, previousReaction };
+      }
+    }
+
+    // Create new reaction
+    const reaction = this.reactionRepository.create({
+      postId,
+      userId,
+      reactionType,
+    });
+    await this.reactionRepository.save(reaction);
+
+    // Update reactions count
+    const reactionsCount = { ...post.reactionsCount };
+    reactionsCount[reactionType] = (reactionsCount[reactionType] || 0) + 1;
+    post.reactionsCount = reactionsCount;
+    post.likesCount = post.likesCount + 1;
+    await this.postRepository.save(post);
+
+    reaction.post = post;
+    return { reaction, isNew: true };
+  }
+
+  async removeReaction(postId: string, userId: string): Promise<boolean> {
+    const reaction = await this.reactionRepository.findOne({
+      where: { postId, userId },
+    });
+
+    if (!reaction) {
+      return false;
+    }
+
+    const post = await this.postRepository.findOne({ where: { id: postId } });
+    if (post) {
+      // Update reactions count
+      const reactionsCount = { ...post.reactionsCount };
+      if (reactionsCount[reaction.reactionType]) {
+        reactionsCount[reaction.reactionType] = Math.max(0, reactionsCount[reaction.reactionType] - 1);
+        if (reactionsCount[reaction.reactionType] === 0) {
+          delete reactionsCount[reaction.reactionType];
+        }
+      }
+      post.reactionsCount = reactionsCount;
+      post.likesCount = Math.max(0, post.likesCount - 1);
+      await this.postRepository.save(post);
+    }
+
+    await this.reactionRepository.delete(reaction.id);
+    return true;
+  }
+
+  async getUserReactionForPost(postId: string, userId: string): Promise<ReactionType | null> {
+    const reaction = await this.reactionRepository.findOne({
+      where: { postId, userId },
+      select: ['reactionType'],
+    });
+    return reaction?.reactionType || null;
+  }
+
+  async getReactionStatusForPosts(userId: string, postIds: string[]): Promise<Map<string, ReactionType | null>> {
+    if (postIds.length === 0) return new Map();
+
+    const reactions = await this.reactionRepository.find({
+      where: { userId, postId: In(postIds) },
+      select: ['postId', 'reactionType'],
+    });
+
+    const statusMap = new Map<string, ReactionType | null>();
+    for (const postId of postIds) {
+      const reaction = reactions.find(r => r.postId === postId);
+      statusMap.set(postId, reaction?.reactionType || null);
+    }
+
+    return statusMap;
+  }
+
+  async getReactionSummary(postId: string): Promise<Record<string, number>> {
+    const post = await this.postRepository.findOne({
+      where: { id: postId },
+      select: ['reactionsCount'],
+    });
+    return post?.reactionsCount || {};
+  }
+
+  // Poll methods
+  async createPoll(
+    postId: string,
+    question: string,
+    options: { text: string }[],
+    endsAt?: Date,
+    isMultipleChoice = false,
+  ): Promise<Poll> {
+    const pollOptions: PollOption[] = options.map((opt, idx) => ({
+      id: idx,
+      text: opt.text,
+      votes: 0,
+    }));
+
+    const poll = this.pollRepository.create({
+      postId,
+      question,
+      options: pollOptions,
+      endsAt,
+      isMultipleChoice,
+      totalVotes: 0,
+    });
+
+    return this.pollRepository.save(poll);
+  }
+
+  async getPollByPostId(postId: string): Promise<Poll | null> {
+    return this.pollRepository.findOne({
+      where: { postId },
+    });
+  }
+
+  async votePoll(
+    pollId: string,
+    userId: string,
+    optionId: number,
+  ): Promise<{ poll: Poll; isNewVote: boolean }> {
+    const poll = await this.pollRepository.findOne({
+      where: { id: pollId },
+    });
+
+    if (!poll) {
+      throw new Error('Poll not found');
+    }
+
+    // Check if poll has ended
+    if (poll.endsAt && new Date() > poll.endsAt) {
+      throw new Error('Poll has ended');
+    }
+
+    // Check if option exists
+    if (!poll.options.find((opt) => opt.id === optionId)) {
+      throw new Error('Invalid option');
+    }
+
+    // Check if user already voted (for single choice polls)
+    if (!poll.isMultipleChoice) {
+      const existingVote = await this.pollVoteRepository.findOne({
+        where: { pollId, userId },
+      });
+
+      if (existingVote) {
+        // Remove old vote
+        const oldOptionId = existingVote.optionId;
+        await this.pollVoteRepository.delete(existingVote.id);
+
+        // Update poll options
+        const options = poll.options.map((opt) => ({
+          ...opt,
+          votes: opt.id === oldOptionId ? Math.max(0, opt.votes - 1) : opt.votes,
+        }));
+
+        poll.options = options;
+        poll.totalVotes = Math.max(0, poll.totalVotes - 1);
+      }
+    } else {
+      // For multiple choice, check if already voted for this specific option
+      const existingVoteForOption = await this.pollVoteRepository.findOne({
+        where: { pollId, userId, optionId },
+      });
+
+      if (existingVoteForOption) {
+        // Toggle off - remove vote
+        await this.pollVoteRepository.delete(existingVoteForOption.id);
+
+        const options = poll.options.map((opt) => ({
+          ...opt,
+          votes: opt.id === optionId ? Math.max(0, opt.votes - 1) : opt.votes,
+        }));
+
+        poll.options = options;
+        poll.totalVotes = Math.max(0, poll.totalVotes - 1);
+        await this.pollRepository.save(poll);
+
+        return { poll, isNewVote: false };
+      }
+    }
+
+    // Create new vote
+    const vote = this.pollVoteRepository.create({
+      pollId,
+      userId,
+      optionId,
+    });
+    await this.pollVoteRepository.save(vote);
+
+    // Update poll options
+    const options = poll.options.map((opt) => ({
+      ...opt,
+      votes: opt.id === optionId ? opt.votes + 1 : opt.votes,
+    }));
+
+    poll.options = options;
+    poll.totalVotes = poll.totalVotes + 1;
+    await this.pollRepository.save(poll);
+
+    return { poll, isNewVote: true };
+  }
+
+  async getUserVotesForPoll(pollId: string, userId: string): Promise<number[]> {
+    const votes = await this.pollVoteRepository.find({
+      where: { pollId, userId },
+      select: ['optionId'],
+    });
+    return votes.map((v) => v.optionId);
+  }
+
+  async getPollsForPosts(postIds: string[]): Promise<Map<string, Poll>> {
+    if (postIds.length === 0) return new Map();
+
+    const polls = await this.pollRepository.find({
+      where: { postId: In(postIds) },
+    });
+
+    const pollMap = new Map<string, Poll>();
+    for (const poll of polls) {
+      pollMap.set(poll.postId, poll);
+    }
+
+    return pollMap;
+  }
+
+  async getUserVotesForPolls(
+    pollIds: string[],
+    userId: string,
+  ): Promise<Map<string, number[]>> {
+    if (pollIds.length === 0) return new Map();
+
+    const votes = await this.pollVoteRepository.find({
+      where: { pollId: In(pollIds), userId },
+      select: ['pollId', 'optionId'],
+    });
+
+    const voteMap = new Map<string, number[]>();
+    for (const vote of votes) {
+      const existing = voteMap.get(vote.pollId) || [];
+      existing.push(vote.optionId);
+      voteMap.set(vote.pollId, existing);
+    }
+
+    return voteMap;
   }
 }

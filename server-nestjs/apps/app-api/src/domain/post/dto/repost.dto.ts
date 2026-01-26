@@ -1,7 +1,7 @@
 import { IsNotEmpty, IsUUID } from 'class-validator';
 
 export class RepostDto {
-  @IsUUID()
+  @IsUUID("all")
   @IsNotEmpty()
   postId: string;
 }

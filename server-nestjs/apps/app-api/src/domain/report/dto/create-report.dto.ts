@@ -13,14 +13,14 @@ export class CreateReportDto {
   description?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsUUID("all")
   reportedUserId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsUUID("all")
   reportedPostId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsUUID("all")
   reportedCommentId?: string;
 }

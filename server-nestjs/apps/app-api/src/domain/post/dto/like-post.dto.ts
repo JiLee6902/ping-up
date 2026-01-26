@@ -1,6 +1,6 @@
 import { IsUUID } from 'class-validator';
 
 export class LikePostDto {
-  @IsUUID()
+  @IsUUID("all")
   postId: string;
 }

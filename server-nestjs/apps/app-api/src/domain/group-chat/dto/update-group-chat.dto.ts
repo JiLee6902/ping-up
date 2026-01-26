@@ -1,7 +1,7 @@
 import { IsString, IsOptional, IsUUID, MaxLength } from 'class-validator';
 
 export class UpdateGroupChatDto {
-  @IsUUID()
+  @IsUUID("all")
   groupId: string;
 
   @IsString()

@@ -1,7 +1,7 @@
 import { IsArray, IsUUID, ArrayMaxSize, ArrayMinSize } from 'class-validator';
 
 export class AddMemberDto {
-  @IsUUID()
+  @IsUUID("all")
   groupId: string;
 
   @IsArray()

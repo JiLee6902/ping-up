@@ -14,7 +14,7 @@ import {
 import { FilesInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard, Public, User as CurrentUser } from '@app/shared-libs';
 import { PostService } from '../service/post.service';
-import { CreatePostDto, LikePostDto, RepostDto, AdvancedSearchDto } from '../dto';
+import { CreatePostDto, LikePostDto, RepostDto, AdvancedSearchDto, ReactPostDto, VotePollDto } from '../dto';
 
 interface CurrentUserPayload {
   id: string;
@@ -162,5 +162,45 @@ export class PostController {
     @Query('q') query: string,
   ) {
     return this.postService.getSearchSuggestions(query);
+  }
+
+  @Post('react')
+  async reactToPost(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: ReactPostDto,
+  ) {
+    return this.postService.reactToPost(user.id, dto);
+  }
+
+  @Delete('react/:postId')
+  async removeReaction(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('postId') postId: string,
+  ) {
+    return this.postService.removeReaction(user.id, postId);
+  }
+
+  @Get('reaction/:postId')
+  async getUserReaction(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('postId') postId: string,
+  ) {
+    return this.postService.getUserReaction(user.id, postId);
+  }
+
+  @Post('poll/vote')
+  async votePoll(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: VotePollDto,
+  ) {
+    return this.postService.votePoll(user.id, dto);
+  }
+
+  @Get('poll/:postId')
+  async getPollByPost(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('postId') postId: string,
+  ) {
+    return this.postService.getPollByPost(user.id, postId);
   }
 }

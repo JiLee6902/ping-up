@@ -1,11 +1,11 @@
 import { IsUUID } from 'class-validator';
 
 export class ConnectionRequestDto {
-  @IsUUID()
+  @IsUUID("all")
   userId: string;
 }
 
 export class AcceptConnectionDto {
-  @IsUUID()
+  @IsUUID("all")
   connectionId: string;
 }

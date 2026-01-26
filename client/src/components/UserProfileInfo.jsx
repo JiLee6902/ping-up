@@ -1,4 +1,4 @@
-import { Calendar, MapPin, PenBox, Verified, UserPlus, UserMinus, Clock, Lock, MoreHorizontal, Ban, UserX, Flag, MessageCircle } from 'lucide-react'
+import { Calendar, MapPin, PenBox, Verified, UserPlus, UserMinus, Clock, Lock, MoreHorizontal, Ban, UserX, Flag, MessageCircle, QrCode, VolumeX } from 'lucide-react'
 import moment from 'moment'
 import React, { useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
@@ -8,6 +8,7 @@ import api from '../api/axios'
 import toast from 'react-hot-toast'
 import ReportModal from './ReportModal'
 import FollowersModal from './FollowersModal'
+import ProfileQRModal from './ProfileQRModal'
 
 const UserProfileInfo = ({ user, posts, profileId, setShowEdit, hasPendingRequest = false, onFollowChange }) => {
   const dispatch = useDispatch()
@@ -18,9 +19,11 @@ const UserProfileInfo = ({ user, posts, profileId, setShowEdit, hasPendingReques
   const [isPending, setIsPending] = useState(hasPendingRequest)
   const [showMenu, setShowMenu] = useState(false)
   const [blocking, setBlocking] = useState(false)
+  const [muting, setMuting] = useState(false)
   const [showReportModal, setShowReportModal] = useState(false)
   const [showFollowersModal, setShowFollowersModal] = useState(false)
   const [followersModalTab, setFollowersModalTab] = useState('followers')
+  const [showQRModal, setShowQRModal] = useState(false)
 
   const isFollowing = currentUser?.following?.includes(user.id || user._id) || false
   const isOwnProfile = !profileId || profileId === currentUser?.id || profileId === currentUser?._id
@@ -118,6 +121,25 @@ const UserProfileInfo = ({ user, posts, profileId, setShowEdit, hasPendingReques
     }
   }
 
+  const handleMute = async () => {
+    if (muting) return
+    if (!window.confirm(`Are you sure you want to mute @${user.username}? Their posts won't appear in your feed.`)) {
+      return
+    }
+    setMuting(true)
+    try {
+      const { data } = await api.post('/api/user/mute', { userId: user.id || user._id })
+      if (data.success) {
+        toast.success(data.message)
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message)
+    } finally {
+      setMuting(false)
+      setShowMenu(false)
+    }
+  }
+
   return (
     <div className='relative py-4 px-6 md:px-8 bg-white'>
       <div className='flex flex-col md:flex-row items-start gap-6'>
@@ -138,10 +160,19 @@ const UserProfileInfo = ({ user, posts, profileId, setShowEdit, hasPendingReques
             </div>
 
             {isOwnProfile ? (
-              <button onClick={() => setShowEdit(true)} className='flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 px-4 py-2 rounded-lg font-medium transition-colors mt-4 md:mt-0 cursor-pointer'>
-                <PenBox className='w-4 h-4' />
-                Edit Profile
-              </button>
+              <div className='flex items-center gap-2 mt-4 md:mt-0'>
+                <button onClick={() => setShowEdit(true)} className='flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer'>
+                  <PenBox className='w-4 h-4' />
+                  Edit Profile
+                </button>
+                <button
+                  onClick={() => setShowQRModal(true)}
+                  className='p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors'
+                  title='Show QR Code'
+                >
+                  <QrCode className='w-5 h-5 text-gray-600 dark:text-gray-300' />
+                </button>
+              </div>
             ) : (
               <div className='flex items-center gap-2 mt-4 md:mt-0'>
                 <button
@@ -172,6 +203,14 @@ const UserProfileInfo = ({ user, posts, profileId, setShowEdit, hasPendingReques
                     <>
                       <div className='fixed inset-0 z-10' onClick={() => setShowMenu(false)} />
                       <div className='absolute right-0 top-10 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20 min-w-[160px]'>
+                        <button
+                          onClick={handleMute}
+                          disabled={muting}
+                          className='w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2'
+                        >
+                          <VolumeX className='w-4 h-4' />
+                          {muting ? 'Muting...' : 'Mute User'}
+                        </button>
                         <button
                           onClick={() => { setShowReportModal(true); setShowMenu(false); }}
                           className='w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2'
@@ -266,6 +305,14 @@ const UserProfileInfo = ({ user, posts, profileId, setShowEdit, hasPendingReques
           username={user.username}
           initialTab={followersModalTab}
           onClose={() => setShowFollowersModal(false)}
+        />
+      )}
+
+      {/* QR Code Modal */}
+      {showQRModal && (
+        <ProfileQRModal
+          user={user}
+          onClose={() => setShowQRModal(false)}
         />
       )}
     </div>

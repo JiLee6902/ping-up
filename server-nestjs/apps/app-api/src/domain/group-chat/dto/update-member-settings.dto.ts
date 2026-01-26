@@ -2,7 +2,7 @@ import { IsUUID, IsOptional, IsBoolean, IsEnum } from 'class-validator';
 import { GroupRole } from '@app/entity';
 
 export class UpdateMemberSettingsDto {
-  @IsUUID()
+  @IsUUID("all")
   groupId: string;
 
   @IsOptional()
@@ -11,10 +11,10 @@ export class UpdateMemberSettingsDto {
 }
 
 export class UpdateMemberRoleDto {
-  @IsUUID()
+  @IsUUID("all")
   groupId: string;
 
-  @IsUUID()
+  @IsUUID("all")
   userId: string;
 
   @IsEnum(GroupRole)

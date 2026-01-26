@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import { Image, X, Smile, MapPin, Video } from 'lucide-react'
+import { Image, X, Smile, MapPin, Video, BarChart2, Plus, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useSelector } from "react-redux"
 import api from '../api/axios'
@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import EmojiPicker from '../components/EmojiPicker'
 
 const MAX_VIDEO_SIZE_MB = 100
+const MAX_POLL_OPTIONS = 4
 
 const CreatePost = () => {
   const navigate = useNavigate()
@@ -21,6 +22,10 @@ const CreatePost = () => {
   const [locationLat, setLocationLat] = useState(null)
   const [locationLng, setLocationLng] = useState(null)
   const [gettingLocation, setGettingLocation] = useState(false)
+  const [showPoll, setShowPoll] = useState(false)
+  const [pollQuestion, setPollQuestion] = useState('')
+  const [pollOptions, setPollOptions] = useState(['', ''])
+  const [pollDuration, setPollDuration] = useState('1d') // 1h, 6h, 12h, 1d, 3d, 7d
   const videoInputRef = useRef(null)
 
   const user = useSelector((state) => state.user.value)
@@ -119,15 +124,68 @@ const CreatePost = () => {
     }
   }
 
+  // Poll helpers
+  const addPollOption = () => {
+    if (pollOptions.length < MAX_POLL_OPTIONS) {
+      setPollOptions([...pollOptions, ''])
+    }
+  }
+
+  const removePollOption = (index) => {
+    if (pollOptions.length > 2) {
+      setPollOptions(pollOptions.filter((_, i) => i !== index))
+    }
+  }
+
+  const updatePollOption = (index, value) => {
+    const newOptions = [...pollOptions]
+    newOptions[index] = value
+    setPollOptions(newOptions)
+  }
+
+  const clearPoll = () => {
+    setShowPoll(false)
+    setPollQuestion('')
+    setPollOptions(['', ''])
+    setPollDuration('1d')
+  }
+
+  const getPollEndsAt = () => {
+    const now = new Date()
+    switch (pollDuration) {
+      case '1h': return new Date(now.getTime() + 1 * 60 * 60 * 1000)
+      case '6h': return new Date(now.getTime() + 6 * 60 * 60 * 1000)
+      case '12h': return new Date(now.getTime() + 12 * 60 * 60 * 1000)
+      case '1d': return new Date(now.getTime() + 24 * 60 * 60 * 1000)
+      case '3d': return new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
+      case '7d': return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+      default: return new Date(now.getTime() + 24 * 60 * 60 * 1000)
+    }
+  }
+
+  const isPollValid = () => {
+    if (!showPoll) return true
+    if (!pollQuestion.trim()) return false
+    const validOptions = pollOptions.filter(opt => opt.trim().length > 0)
+    return validOptions.length >= 2
+  }
+
   const handleSubmit = async () => {
-    if (!images.length && !content && !video) {
-      return toast.error('Please add content, image, or video')
+    // Poll posts can have just poll without content
+    const hasPoll = showPoll && isPollValid()
+    if (!images.length && !content && !video && !hasPoll) {
+      return toast.error('Please add content, image, video, or poll')
+    }
+    if (showPoll && !isPollValid()) {
+      return toast.error('Please complete the poll with question and at least 2 options')
     }
     setLoading(true)
 
     // Determine post type
     let postType = 'text'
-    if (video) {
+    if (hasPoll) {
+      postType = 'poll'
+    } else if (video) {
       postType = content ? 'text_with_video' : 'video'
     } else if (images.length) {
       postType = content ? 'text_with_image' : 'image'
@@ -151,6 +209,17 @@ const CreatePost = () => {
       }
       if (locationLng !== null) {
         formData.append('locationLng', locationLng)
+      }
+
+      // Add poll data
+      if (hasPoll) {
+        const pollData = {
+          question: pollQuestion.trim(),
+          options: pollOptions.filter(opt => opt.trim()).map(opt => ({ text: opt.trim() })),
+          endsAt: getPollEndsAt().toISOString(),
+          isMultipleChoice: false,
+        }
+        formData.append('poll', JSON.stringify(pollData))
       }
 
       const { data } = await api.post('/api/post/add', formData)
@@ -244,6 +313,89 @@ const CreatePost = () => {
             </div>
           )}
 
+          {/* Poll Section */}
+          {showPoll && (
+            <div className='mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-3'>
+              <div className='flex justify-between items-center'>
+                <h3 className='font-medium text-gray-900 dark:text-white flex items-center gap-2'>
+                  <BarChart2 className='w-5 h-5' />
+                  Create Poll
+                </h3>
+                <button
+                  type='button'
+                  onClick={clearPoll}
+                  className='text-gray-500 hover:text-red-500 transition'
+                >
+                  <X className='w-5 h-5' />
+                </button>
+              </div>
+
+              {/* Poll Question */}
+              <input
+                type='text'
+                value={pollQuestion}
+                onChange={(e) => setPollQuestion(e.target.value)}
+                placeholder='Ask a question...'
+                maxLength={280}
+                className='w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 outline-none focus:ring-2 focus:ring-blue-500'
+              />
+
+              {/* Poll Options */}
+              <div className='space-y-2'>
+                {pollOptions.map((option, index) => (
+                  <div key={index} className='flex items-center gap-2'>
+                    <input
+                      type='text'
+                      value={option}
+                      onChange={(e) => updatePollOption(index, e.target.value)}
+                      placeholder={`Option ${index + 1}`}
+                      maxLength={100}
+                      className='flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 outline-none focus:ring-2 focus:ring-blue-500'
+                    />
+                    {pollOptions.length > 2 && (
+                      <button
+                        type='button'
+                        onClick={() => removePollOption(index)}
+                        className='p-2 text-gray-500 hover:text-red-500 transition'
+                      >
+                        <Trash2 className='w-4 h-4' />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Add Option Button */}
+              {pollOptions.length < MAX_POLL_OPTIONS && (
+                <button
+                  type='button'
+                  onClick={addPollOption}
+                  className='flex items-center gap-2 text-blue-500 hover:text-blue-600 text-sm font-medium'
+                >
+                  <Plus className='w-4 h-4' />
+                  Add option
+                </button>
+              )}
+
+              {/* Poll Duration */}
+              <div className='flex items-center gap-2'>
+                <span className='text-sm text-gray-600 dark:text-gray-400'>Poll ends in:</span>
+                <select
+                  value={pollDuration}
+                  onChange={(e) => setPollDuration(e.target.value)}
+                  className='p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm outline-none'
+                >
+                  <option value='1h'>1 hour</option>
+                  <option value='6h'>6 hours</option>
+                  <option value='12h'>12 hours</option>
+                  <option value='1d'>1 day</option>
+                  <option value='3d'>3 days</option>
+                  <option value='7d'>7 days</option>
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* Bottom Bar */}
           <div className='flex items-center justify-between pt-3 border-t border-gray-300 dark:border-gray-600'>
             <div className='flex items-center gap-2'>
@@ -319,6 +471,22 @@ const CreatePost = () => {
                 ) : (
                   <MapPin className='size-6' />
                 )}
+              </button>
+
+              {/* Poll Button */}
+              <button
+                type='button'
+                onClick={() => {
+                  if (images.length > 0 || video) {
+                    toast.error('Cannot add poll with images or video')
+                    return
+                  }
+                  setShowPoll(!showPoll)
+                }}
+                className={`text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition ${showPoll ? 'text-blue-500' : ''} ${(images.length > 0 || video) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title='Create poll'
+              >
+                <BarChart2 className='size-6' />
               </button>
             </div>
 

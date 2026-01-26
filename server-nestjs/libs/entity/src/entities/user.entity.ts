@@ -12,6 +12,7 @@ import { Story } from './story.entity';
 import { Message } from './message.entity';
 import { Connection } from './connection.entity';
 import { UserRefreshToken } from './user-refresh-token.entity';
+import { SubscriptionTier } from '@app/enum';
 
 @Entity('users')
 export class User extends BaseEntity {
@@ -88,4 +89,22 @@ export class User extends BaseEntity {
 
   @Column({ name: 'two_factor_backup_codes', type: 'simple-array', nullable: true })
   twoFactorBackupCodes?: string[];
+
+  // Subscription fields
+  @Column({
+    type: 'enum',
+    enum: SubscriptionTier,
+    name: 'subscription_tier',
+    default: SubscriptionTier.FREE
+  })
+  subscriptionTier: SubscriptionTier;
+
+  @Column({ name: 'is_verified', default: false })
+  isVerified: boolean;
+
+  @Column({ name: 'profile_theme', nullable: true })
+  profileTheme?: string;
+
+  @Column({ name: 'pinned_post_ids', type: 'simple-array', nullable: true })
+  pinnedPostIds?: string[];
 }

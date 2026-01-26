@@ -8,6 +8,7 @@ import { dataSourceOptions } from '@app/entity';
 import { RedisModule } from '@app/external-infra/redis';
 import { WebSocketModule } from '@app/external-infra/websocket';
 import { EmailModule } from '@app/external-infra/email';
+import { VnpayModule } from '@app/external-infra/vnpay';
 
 import { AuthModule } from './domain/auth/auth.module';
 import { UserModule } from './domain/user/user.module';
@@ -19,6 +20,7 @@ import { CommentModule } from './domain/comment/comment.module';
 import { NotificationModule } from './domain/notification/notification.module';
 import { ReportModule } from './domain/report/report.module';
 import { GroupChatModule } from './domain/group-chat/group-chat.module';
+import { PaymentModule } from './domain/payment/payment.module';
 import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 
@@ -72,6 +74,7 @@ import { JobsModule } from './jobs/jobs.module';
     RedisModule,
     WebSocketModule,
     EmailModule,
+    VnpayModule,
 
     // Domain modules
     AuthModule,
@@ -84,6 +87,7 @@ import { JobsModule } from './jobs/jobs.module';
     NotificationModule,
     ReportModule,
     GroupChatModule,
+    PaymentModule,
 
     // Health check
     HealthModule,

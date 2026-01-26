@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan, In } from 'typeorm';
-import { User, Connection, BlockedUser } from '@app/entity';
+import { User, Connection, BlockedUser, MutedUser } from '@app/entity';
 import { ConnectionStatus } from '@app/enum';
 
 @Injectable()
@@ -13,6 +13,8 @@ export class UserRepository {
     private readonly connectionRepository: Repository<Connection>,
     @InjectRepository(BlockedUser)
     private readonly blockedUserRepository: Repository<BlockedUser>,
+    @InjectRepository(MutedUser)
+    private readonly mutedUserRepository: Repository<MutedUser>,
   ) {}
 
   async findById(id: string): Promise<User | null> {
@@ -371,5 +373,61 @@ export class UserRepository {
       select: ['blockerId'],
     });
     return blocks.map((b) => b.blockerId);
+  }
+
+  // Mute user methods
+  async muteUser(muterId: string, mutedId: string, muteUntil?: Date): Promise<MutedUser> {
+    const mute = this.mutedUserRepository.create({
+      muterId,
+      mutedId,
+      muteUntil,
+    });
+    return this.mutedUserRepository.save(mute);
+  }
+
+  async unmuteUser(muterId: string, mutedId: string): Promise<void> {
+    await this.mutedUserRepository.delete({
+      muterId,
+      mutedId,
+    });
+  }
+
+  async isMuted(muterId: string, mutedId: string): Promise<boolean> {
+    const mute = await this.mutedUserRepository.findOne({
+      where: { muterId, mutedId },
+    });
+    if (!mute) return false;
+    // Check if mute is still active (not expired)
+    if (mute.muteUntil && mute.muteUntil < new Date()) {
+      // Mute expired, remove it
+      await this.mutedUserRepository.delete({ id: mute.id });
+      return false;
+    }
+    return true;
+  }
+
+  async getMutedUsers(userId: string): Promise<User[]> {
+    const mutes = await this.mutedUserRepository.find({
+      where: { muterId: userId },
+      relations: ['muted'],
+      order: { createdAt: 'DESC' },
+    });
+    // Filter out expired mutes
+    const activeMutes = mutes.filter(
+      (m) => !m.muteUntil || m.muteUntil >= new Date(),
+    );
+    return activeMutes.map((m) => m.muted);
+  }
+
+  async getMutedUserIds(userId: string): Promise<string[]> {
+    const mutes = await this.mutedUserRepository.find({
+      where: { muterId: userId },
+      select: ['mutedId', 'muteUntil'],
+    });
+    // Filter out expired mutes
+    const activeMutes = mutes.filter(
+      (m) => !m.muteUntil || m.muteUntil >= new Date(),
+    );
+    return activeMutes.map((m) => m.mutedId);
   }
 }

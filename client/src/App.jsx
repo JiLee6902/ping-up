@@ -20,6 +20,11 @@ import Search from './pages/Search'
 import AdvancedSearch from './pages/AdvancedSearch'
 import Saved from './pages/Saved'
 import BlockedUsers from './pages/BlockedUsers'
+import MutedUsers from './pages/MutedUsers'
+import Wallet from './pages/Wallet'
+import TopUp from './pages/TopUp'
+import PaymentResult from './pages/PaymentResult'
+import Subscription from './pages/Subscription'
 import ProtectedRoute from './components/ProtectedRoute'
 import Notification from './components/Notification'
 import VideoCall from './components/VideoCall'
@@ -148,6 +153,11 @@ const App = () => {
             <Route path='advanced-search' element={<AdvancedSearch />} />
             <Route path='saved' element={<Saved />} />
             <Route path='blocked' element={<BlockedUsers />} />
+            <Route path='muted' element={<MutedUsers />} />
+            <Route path='wallet' element={<Wallet />} />
+            <Route path='topup' element={<TopUp />} />
+            <Route path='payment/result' element={<PaymentResult />} />
+            <Route path='subscription' element={<Subscription />} />
             <Route path='profile' element={<Profile />} />
             <Route path='profile/:profileId' element={<Profile />} />
             <Route path='profile/username/:username' element={<Profile />} />

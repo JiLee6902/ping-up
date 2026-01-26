@@ -30,7 +30,8 @@ const ChatBox = () => {
   const [loadingUser, setLoadingUser] = useState(true)
   const messagesEndRef = useRef(null)
 
-  const { socket, isUserOnline, fetchOnlineStatus } = useSocket()
+  const { socket, isUserOnline, fetchOnlineStatus, isUserTyping, emitTyping, emitStopTyping } = useSocket()
+  const typingTimeoutRef = useRef(null)
   const connections = useSelector((state) => state.connections.connections)
 
   // Listen for socket events specific to this chat
@@ -144,6 +145,13 @@ const ChatBox = () => {
       if (isSending) return
 
       setIsSending(true)
+
+      // Stop typing indicator when sending
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      emitStopTyping(userId)
+
       const formData = new FormData()
       formData.append('toUserId', userId)
       formData.append('text', text)
@@ -221,6 +229,36 @@ const ChatBox = () => {
   const chatUserId = user?.id || user?._id
   const displayName = chatSettings?.nickname || fullName
   const isOnline = isUserOnline(userId)
+  const isTyping = isUserTyping(userId)
+
+  // Handle text input with typing indicator
+  const handleTextChange = (e) => {
+    setText(e.target.value)
+
+    // Emit typing event
+    emitTyping(userId)
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+
+    // Set timeout to emit stopTyping after 1.5 seconds of no typing
+    typingTimeoutRef.current = setTimeout(() => {
+      emitStopTyping(userId)
+    }, 1500)
+  }
+
+  // Clean up typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      // Emit stop typing when leaving chat
+      emitStopTyping(userId)
+    }
+  }, [userId, emitStopTyping])
 
   // Helper to normalize date string with timezone
   const normalizeDate = (dateString) => {
@@ -301,7 +339,18 @@ const ChatBox = () => {
           </div>
           <div>
             <p className="font-semibold text-gray-900 text-[15px]">{displayName}</p>
-            <p className="text-xs text-gray-500">{isOnline ? 'Active now' : 'Offline'}</p>
+            {isTyping ? (
+              <p className="text-xs text-blue-500 font-medium flex items-center gap-1">
+                <span className="flex gap-0.5">
+                  <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+                typing...
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500">{isOnline ? 'Active now' : 'Offline'}</p>
+            )}
           </div>
         </div>
         <div className='flex items-center gap-0.5'>
@@ -415,7 +464,7 @@ const ChatBox = () => {
               className='flex-1 bg-transparent outline-none text-[14px] text-gray-900 placeholder-gray-500'
               placeholder='Aa'
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              onChange={(e) => setText(e.target.value)}
+              onChange={handleTextChange}
               value={text}
             />
           </div>

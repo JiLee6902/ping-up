@@ -3,3 +3,7 @@ export * from './media-type.enum';
 export * from './connection-status.enum';
 export * from './message-type.enum';
 export * from './notification-type.enum';
+export * from './reaction-type.enum';
+export * from './subscription-tier.enum';
+export * from './transaction-type.enum';
+export * from './payment-status.enum';
