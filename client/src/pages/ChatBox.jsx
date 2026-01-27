@@ -7,6 +7,9 @@ import { addMessage, fetchMessages, resetMessages, markMessagesSeen } from '../f
 import toast from 'react-hot-toast'
 import ChatSettingsModal from '../components/ChatSettingsModal'
 import VideoCall from '../components/VideoCall'
+import VoiceRecorder from '../components/VoiceRecorder'
+import VoicePlayer from '../components/VoicePlayer'
+import TextToSpeech from '../components/TextToSpeech'
 import { useSocket } from '../context/SocketContext'
 import EmojiPicker from '../components/EmojiPicker'
 import Loading from '../components/Loading'
@@ -28,6 +31,7 @@ const ChatBox = () => {
   const [isSending, setIsSending] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [loadingUser, setLoadingUser] = useState(true)
+  const [isRecording, setIsRecording] = useState(false)
   const messagesEndRef = useRef(null)
 
   const { socket, isUserOnline, fetchOnlineStatus, isUserTyping, emitTyping, emitStopTyping } = useSocket()
@@ -161,6 +165,29 @@ const ChatBox = () => {
       if (data.success) {
         setText('')
         setImage(null)
+        dispatch(addMessage(data.data))
+      } else {
+        throw new Error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  const sendVoiceMessage = async (audioBlob) => {
+    try {
+      if (isSending) return
+      setIsSending(true)
+      setIsRecording(false)
+
+      const formData = new FormData()
+      formData.append('toUserId', userId)
+      formData.append('audio', audioBlob, 'voice.webm')
+
+      const { data } = await api.post('/api/message/send', formData)
+      if (data.success) {
         dispatch(addMessage(data.data))
       } else {
         throw new Error(data.message)
@@ -408,12 +435,31 @@ const ChatBox = () => {
                     {messageType === 'image' && (
                       <img src={mediaUrl} className='max-w-[200px] rounded-xl' alt="" />
                     )}
-                    {message.text && (
+                    {messageType === 'audio' && (
                       <div
-                        className={`inline-block px-3 py-1 text-[14px] rounded-2xl ${isSent ? 'text-white' : 'bg-gray-100 text-gray-900'} ${messageType === 'image' ? 'mt-0.5' : ''}`}
+                        className={`inline-block rounded-2xl px-2 py-1.5 ${isSent ? 'text-white' : 'bg-gray-100 text-gray-900'}`}
                         style={isSent ? { backgroundColor: msgColor } : undefined}
                       >
-                        <p className='whitespace-pre-wrap text-left leading-snug'>{message.text}</p>
+                        <VoicePlayer src={mediaUrl} isMine={isSent} />
+                        {message.transcription && (
+                          <div className={`flex items-center gap-1 mt-1 px-1 pb-0.5`}>
+                            <p className={`text-[12px] leading-snug ${isSent ? 'text-white/80' : 'text-gray-600 dark:text-gray-400'}`}>
+                              {message.transcription}
+                            </p>
+                            <TextToSpeech text={message.transcription} isMine={isSent} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {message.text && (
+                      <div className={`flex items-end gap-1 ${isSent ? 'flex-row-reverse' : ''}`}>
+                        <div
+                          className={`inline-block px-3 py-1 text-[14px] rounded-2xl ${isSent ? 'text-white' : 'bg-gray-100 text-gray-900'} ${messageType === 'image' || messageType === 'audio' ? 'mt-0.5' : ''}`}
+                          style={isSent ? { backgroundColor: msgColor } : undefined}
+                        >
+                          <p className='whitespace-pre-wrap text-left leading-snug'>{message.text}</p>
+                        </div>
+                        <TextToSpeech text={message.text} isMine={isSent} />
                       </div>
                     )}
                     {isLastMessage && showSeenOnLastMessage && (
@@ -434,48 +480,68 @@ const ChatBox = () => {
       {/* Input */}
       <div className='px-3 py-2 bg-white/95 backdrop-blur-sm border-t border-gray-200'>
         <div className='max-w-2xl mx-auto flex items-center gap-2'>
-          <label htmlFor="image" className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition shrink-0'>
-            {image
-              ? <img src={URL.createObjectURL(image)} alt="" className='h-5 w-5 rounded object-cover' />
-              : <ImageIcon className='w-5 h-5' style={{ color: msgColor }} />
-            }
-            <input type="file" id='image' accept="image/*" hidden onChange={(e) => setImage(e.target.files[0])} />
-          </label>
-          {/* Emoji Button */}
-          <div className='relative'>
-            <button
-              type='button'
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition shrink-0'
-              style={{ color: msgColor }}
-            >
-              <Smile className='w-5 h-5' />
-            </button>
-            {showEmojiPicker && (
-              <EmojiPicker
-                onEmojiSelect={(emoji) => setText((prev) => prev + emoji)}
-                onClose={() => setShowEmojiPicker(false)}
-              />
-            )}
-          </div>
-          <div className='flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2'>
-            <input
-              type="text"
-              className='flex-1 bg-transparent outline-none text-[14px] text-gray-900 placeholder-gray-500'
-              placeholder='Aa'
-              onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              onChange={handleTextChange}
-              value={text}
+          {isRecording ? (
+            <VoiceRecorder
+              onSend={sendVoiceMessage}
+              onCancel={() => setIsRecording(false)}
             />
-          </div>
-          <button
-            onClick={sendMessage}
-            disabled={isSending || (!text && !image)}
-            className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0'
-            style={{ color: msgColor }}
-          >
-            <SendHorizonal className='w-5 h-5' />
-          </button>
+          ) : (
+            <>
+              <label htmlFor="image" className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition shrink-0'>
+                {image
+                  ? <img src={URL.createObjectURL(image)} alt="" className='h-5 w-5 rounded object-cover' />
+                  : <ImageIcon className='w-5 h-5' style={{ color: msgColor }} />
+                }
+                <input type="file" id='image' accept="image/*" hidden onChange={(e) => setImage(e.target.files[0])} />
+              </label>
+              {/* Emoji Button */}
+              <div className='relative'>
+                <button
+                  type='button'
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition shrink-0'
+                  style={{ color: msgColor }}
+                >
+                  <Smile className='w-5 h-5' />
+                </button>
+                {showEmojiPicker && (
+                  <EmojiPicker
+                    onEmojiSelect={(emoji) => setText((prev) => prev + emoji)}
+                    onClose={() => setShowEmojiPicker(false)}
+                  />
+                )}
+              </div>
+              <div className='flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2'>
+                <input
+                  type="text"
+                  className='flex-1 bg-transparent outline-none text-[14px] text-gray-900 placeholder-gray-500'
+                  placeholder='Aa'
+                  onKeyDown={e => e.key === 'Enter' && sendMessage()}
+                  onChange={handleTextChange}
+                  value={text}
+                />
+              </div>
+              {/* Show mic button when no text/image, send button otherwise */}
+              {!text && !image ? (
+                <button
+                  onClick={() => setIsRecording(true)}
+                  className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition shrink-0'
+                  style={{ color: msgColor }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                </button>
+              ) : (
+                <button
+                  onClick={sendMessage}
+                  disabled={isSending || (!text && !image)}
+                  className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0'
+                  style={{ color: msgColor }}
+                >
+                  <SendHorizonal className='w-5 h-5' />
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
 

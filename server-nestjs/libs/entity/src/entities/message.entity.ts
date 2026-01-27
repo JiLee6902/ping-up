@@ -11,6 +11,7 @@ import { User } from './user.entity';
 export enum MessageType {
   TEXT = 'text',
   IMAGE = 'image',
+  AUDIO = 'audio',
 }
 
 @Entity('messages')
@@ -36,6 +37,9 @@ export class Message extends BaseEntity {
 
   @Column({ name: 'media_url', nullable: true })
   mediaUrl?: string;
+
+  @Column({ type: 'text', nullable: true })
+  transcription?: string;
 
   @Column({ default: false })
   seen: boolean;

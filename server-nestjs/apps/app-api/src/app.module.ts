@@ -9,6 +9,7 @@ import { RedisModule } from '@app/external-infra/redis';
 import { WebSocketModule } from '@app/external-infra/websocket';
 import { EmailModule } from '@app/external-infra/email';
 import { VnpayModule } from '@app/external-infra/vnpay';
+import { GroqModule } from '@app/external-infra/groq';
 
 import { AuthModule } from './domain/auth/auth.module';
 import { UserModule } from './domain/user/user.module';
@@ -75,6 +76,7 @@ import { JobsModule } from './jobs/jobs.module';
     WebSocketModule,
     EmailModule,
     VnpayModule,
+    GroqModule,
 
     // Domain modules
     AuthModule,

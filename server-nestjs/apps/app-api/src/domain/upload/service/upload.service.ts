@@ -31,6 +31,10 @@ export class UploadService {
     return this.imageKitService.uploadMessageImage(file);
   }
 
+  async uploadMessageAudio(file: Express.Multer.File): Promise<UploadResult> {
+    return this.imageKitService.uploadMessageAudio(file);
+  }
+
   async uploadStoryMedia(file: Express.Multer.File): Promise<UploadResult> {
     return this.imageKitService.uploadStoryMedia(file);
   }
