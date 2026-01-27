@@ -7,6 +7,7 @@ import { WebSocketService, SocketEvent } from '@app/external-infra/websocket';
 import { SendMessageDto, GetMessagesDto, UpdateChatSettingsDto, GetChatSettingsDto } from '../dto';
 import { MessageType } from '@app/enum';
 import { User, ChatEvent, ChatEventType } from '@app/entity';
+import { GroqService } from '@app/external-infra/groq';
 
 @Injectable()
 export class MessageService {
@@ -14,6 +15,7 @@ export class MessageService {
     private readonly messageRepository: MessageRepository,
     private readonly uploadService: UploadService,
     private readonly webSocketService: WebSocketService,
+    private readonly groqService: GroqService,
     @InjectRepository(ChatEvent)
     private readonly chatEventRepository: Repository<ChatEvent>,
   ) {}
@@ -21,20 +23,33 @@ export class MessageService {
   async sendMessage(
     userId: string,
     dto: SendMessageDto,
-    file?: Express.Multer.File,
+    imageFile?: Express.Multer.File,
+    audioFile?: Express.Multer.File,
   ) {
-    if (!dto.text && !file) {
-      throw new BadRequestException('Message must have text or image');
+    if (!dto.text && !imageFile && !audioFile) {
+      throw new BadRequestException('Message must have text, image, or audio');
     }
 
     let mediaUrl: string | undefined;
     let messageType = dto.messageType || MessageType.TEXT;
+    let transcription: string | undefined;
 
     // Upload image if provided
-    if (file) {
-      const result = await this.uploadService.uploadMessageImage(file);
+    if (imageFile) {
+      const result = await this.uploadService.uploadMessageImage(imageFile);
       mediaUrl = result.url;
       messageType = MessageType.IMAGE;
+    }
+
+    // Upload audio if provided
+    if (audioFile) {
+      const [uploadResult, transcriptionResult] = await Promise.all([
+        this.uploadService.uploadMessageAudio(audioFile),
+        this.groqService.transcribeAudio(audioFile),
+      ]);
+      mediaUrl = uploadResult.url;
+      messageType = MessageType.AUDIO;
+      transcription = transcriptionResult || undefined;
     }
 
     // Check if recipient is private and if sender is not following them
@@ -64,6 +79,7 @@ export class MessageService {
       text: dto.text,
       mediaUrl,
       messageType,
+      transcription,
       seen: false,
       isMessageRequest,
       isRequestAccepted: !isMessageRequest,
@@ -82,6 +98,45 @@ export class MessageService {
       this.webSocketService.sendToUser(dto.toUserId, SocketEvent.NEW_MESSAGE, {
         message: this.formatMessageResponse(fullMessage),
       });
+    }
+
+    // If recipient is a bot, generate AI response
+    if (recipient.isBot) {
+      // Get recent conversation history for context
+      const recentMessages = await this.messageRepository.getChatMessages(
+        userId, dto.toUserId, 20, 0,
+      );
+
+      // Format messages for Groq API (reverse to chronological order)
+      const chatHistory = [...recentMessages].reverse().map((m) => ({
+        role: m.fromUserId === dto.toUserId ? 'assistant' as const : 'user' as const,
+        content: m.text || '[media]',
+      }));
+
+      const systemPrompt = {
+        role: 'system' as const,
+        content: 'Ban la PingUp AI, tro ly than thien cua ung dung PingUp. Tra loi ngan gon, huu ich, bang tieng Viet hoac tieng Anh tuy theo ngon ngu cua nguoi dung.',
+      };
+
+      const aiResponse = await this.groqService.chatCompletion([systemPrompt, ...chatHistory]);
+
+      if (aiResponse) {
+        const botMessage = await this.messageRepository.create({
+          fromUser: { id: dto.toUserId } as User,
+          toUser: { id: userId } as User,
+          text: aiResponse,
+          messageType: MessageType.TEXT,
+          seen: false,
+          isMessageRequest: false,
+          isRequestAccepted: true,
+        });
+
+        const fullBotMessage = await this.messageRepository.findById(botMessage.id);
+
+        this.webSocketService.sendToUser(userId, SocketEvent.NEW_MESSAGE, {
+          message: this.formatMessageResponse(fullBotMessage),
+        });
+      }
     }
 
     return {
@@ -191,6 +246,7 @@ export class MessageService {
       text: message.text,
       mediaUrl: message.mediaUrl,
       messageType: message.messageType,
+      transcription: message.transcription || null,
       seen: message.seen,
       seenAt: message.seenAt ? new Date(message.seenAt).toISOString() : null,
       fromUser: {

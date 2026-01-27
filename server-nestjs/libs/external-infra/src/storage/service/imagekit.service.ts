@@ -97,6 +97,28 @@ export class ImageKitService {
     });
   }
 
+  async uploadMessageAudio(file: Express.Multer.File): Promise<ImageKitUploadResult> {
+    // Audio files don't need image transformations
+    try {
+      const result = await this.imageKit.upload({
+        file: file.buffer,
+        fileName: `${Date.now()}-${file.originalname}`,
+        folder: 'pingup/audio',
+      });
+
+      this.logger.debug(`Audio uploaded to ImageKit: ${result.url}`);
+
+      return {
+        url: result.url,
+        fileId: result.fileId,
+        name: result.name,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to upload audio: ${error.message}`);
+      throw error;
+    }
+  }
+
   async uploadPostVideo(file: Express.Multer.File): Promise<ImageKitUploadResult> {
     // For video files, we don't apply image transformations
     try {

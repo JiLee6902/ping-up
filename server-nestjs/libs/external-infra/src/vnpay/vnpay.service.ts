@@ -53,7 +53,7 @@ export class VnpayService {
     );
     this.returnUrl = this.configService.get<string>(
       'VNPAY_RETURN_URL',
-      'http://localhost:3000/payment/result',
+      'http://localhost:4000/api/payment/return',
     );
   }
 
@@ -71,7 +71,7 @@ export class VnpayService {
       vnp_TxnRef: params.orderId,
       vnp_OrderInfo: params.orderInfo,
       vnp_OrderType: 'other',
-      vnp_Amount: params.amount * 100, // VNPay requires amount in smallest currency unit (x100)
+      vnp_Amount: params.amount * 100,
       vnp_ReturnUrl: params.returnUrl || this.returnUrl,
       vnp_IpAddr: params.ipAddr,
       vnp_CreateDate: createDate,

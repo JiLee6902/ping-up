@@ -45,6 +45,9 @@ export class User extends BaseEntity {
   @Column({ name: 'is_private', default: false })
   isPrivate: boolean;
 
+  @Column({ name: 'is_bot', default: false })
+  isBot: boolean;
+
   @ManyToMany(() => User, (user) => user.following)
   @JoinTable({
     name: 'user_followers',

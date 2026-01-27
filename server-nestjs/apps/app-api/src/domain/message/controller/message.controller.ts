@@ -6,8 +6,9 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard, User as CurrentUser } from '@app/shared-libs';
 import { MessageService } from '../service/message.service';
 import { SendMessageDto, GetMessagesDto, UpdateChatSettingsDto, GetChatSettingsDto } from '../dto';
@@ -24,13 +25,18 @@ export class MessageController {
   constructor(private readonly messageService: MessageService) {}
 
   @Post('send')
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(FileFieldsInterceptor([
+    { name: 'image', maxCount: 1 },
+    { name: 'audio', maxCount: 1 },
+  ]))
   async sendMessage(
     @CurrentUser() user: CurrentUserPayload,
     @Body() dto: SendMessageDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFiles() files?: { image?: Express.Multer.File[]; audio?: Express.Multer.File[] },
   ) {
-    return this.messageService.sendMessage(user.id, dto, file);
+    const imageFile = files?.image?.[0];
+    const audioFile = files?.audio?.[0];
+    return this.messageService.sendMessage(user.id, dto, imageFile, audioFile);
   }
 
   @Post('get')

@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { MessageSquare, Search, X, Check, Inbox, MessageCircle, Lock, Loader2 } from 'lucide-react'
+import { MessageSquare, Search, X, Check, Inbox, MessageCircle, Lock, Loader2, Bot } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
 import { useSocket } from '../context/SocketContext'
 import { ChatItemSkeleton } from '../components/Skeleton'
+
+const AI_BOT_ID = '00000000-0000-4000-a000-000000000001'
 
 const Messages = () => {
   const { connections } = useSelector((state) => state.connections)
@@ -160,9 +162,18 @@ const Messages = () => {
     <div className='min-h-screen relative bg-slate-50 dark:bg-gray-900'>
       <div className='max-w-6xl mx-auto p-6'>
         {/* Title */}
-        <div className='mb-6'>
-          <h1 className='text-3xl font-bold text-slate-900 dark:text-white mb-2'>Messages</h1>
-          <p className='text-slate-600 dark:text-gray-300'>Talk to your friends and family</p>
+        <div className='mb-6 flex items-center justify-between'>
+          <div>
+            <h1 className='text-3xl font-bold text-slate-900 dark:text-white mb-2'>Messages</h1>
+            <p className='text-slate-600 dark:text-gray-300'>Talk to your friends and family</p>
+          </div>
+          <button
+            onClick={() => navigate(`/messages/${AI_BOT_ID}`)}
+            className='flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-xl hover:opacity-90 transition shadow-lg shadow-purple-500/25 active:scale-95'
+          >
+            <Bot className='w-5 h-5' />
+            <span className='font-medium'>PingUp AI</span>
+          </button>
         </div>
 
         {/* Search Box */}
