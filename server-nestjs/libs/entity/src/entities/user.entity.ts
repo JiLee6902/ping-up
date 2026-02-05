@@ -48,6 +48,12 @@ export class User extends BaseEntity {
   @Column({ name: 'is_bot', default: false })
   isBot: boolean;
 
+  @Column({ name: 'is_guest', default: false })
+  isGuest: boolean;
+
+  @Column({ name: 'guest_visit_count', default: 0 })
+  guestVisitCount: number;
+
   @ManyToMany(() => User, (user) => user.following)
   @JoinTable({
     name: 'user_followers',

@@ -25,3 +25,6 @@ export * from './payment-order.entity';
 export * from './subscription.entity';
 export * from './profile-view.entity';
 export * from './scheduled-post.entity';
+export * from './user-key-bundle.entity';
+export * from './message-deletion.entity';
+export * from './group-message-deletion.entity';

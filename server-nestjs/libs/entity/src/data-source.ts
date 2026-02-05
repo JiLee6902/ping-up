@@ -30,6 +30,9 @@ import {
   Subscription,
   ProfileView,
   ScheduledPost,
+  UserKeyBundle,
+  MessageDeletion,
+  GroupMessageDeletion,
 } from './entities';
 
 // Load env file based on NODE_ENV
@@ -68,6 +71,9 @@ const entities = [
   Subscription,
   ProfileView,
   ScheduledPost,
+  UserKeyBundle,
+  MessageDeletion,
+  GroupMessageDeletion,
 ];
 
 export const dataSourceOptions: DataSourceOptions = {
