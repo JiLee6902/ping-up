@@ -615,6 +615,10 @@ export class MessageService {
 
     const updatedMessage = await this.messageRepository.unsendMessage(messageId);
 
+    if (!updatedMessage) {
+      throw new BadRequestException('Failed to unsend message');
+    }
+
     // Notify the other user via WebSocket
     const recipientId = message.toUser.id;
     this.webSocketService.sendToUser(recipientId, SocketEvent.MESSAGE_UNSENT, {

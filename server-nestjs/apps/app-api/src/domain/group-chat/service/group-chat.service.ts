@@ -500,6 +500,10 @@ export class GroupChatService {
 
     const updatedMessage = await this.groupChatRepository.unsendMessage(messageId);
 
+    if (!updatedMessage) {
+      throw new BadRequestException('Failed to unsend message');
+    }
+
     // Notify all group members except sender
     const members = await this.groupChatRepository.getGroupMembers(message.groupChatId);
     for (const member of members) {
