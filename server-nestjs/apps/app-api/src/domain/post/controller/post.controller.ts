@@ -66,6 +66,16 @@ export class PostController {
     return this.postService.getGlobalPosts(user?.id || null, limit, offset);
   }
 
+  @Public()
+  @Get('trending')
+  async getTrendingPosts(
+    @CurrentUser() user: CurrentUserPayload | null,
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number,
+  ) {
+    return this.postService.getTrendingPosts(user?.id || null, limit, offset);
+  }
+
   @Get('liked/:userId')
   async getLikedPosts(
     @CurrentUser() user: CurrentUserPayload,

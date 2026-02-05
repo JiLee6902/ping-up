@@ -32,7 +32,7 @@ export class SubscriptionService {
     const now = new Date();
     const isPremium =
       subscription.tier === SubscriptionTier.PREMIUM &&
-      subscription.premiumExpiresAt !== null &&
+      subscription.premiumExpiresAt != null &&
       subscription.premiumExpiresAt > now;
 
     let daysRemaining: number | null = null;

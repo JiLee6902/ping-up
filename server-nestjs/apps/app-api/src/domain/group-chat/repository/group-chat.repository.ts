@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { GroupChat, GroupMember, GroupMessage, User, GroupRole, GroupMessageType } from '@app/entity';
+import { GroupChat, GroupMember, GroupMessage, User, GroupRole, GroupMessageType, GroupMessageDeletion } from '@app/entity';
 
 @Injectable()
 export class GroupChatRepository {
@@ -14,6 +14,8 @@ export class GroupChatRepository {
     private readonly groupMessageRepository: Repository<GroupMessage>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(GroupMessageDeletion)
+    private readonly groupMessageDeletionRepository: Repository<GroupMessageDeletion>,
   ) {}
 
   // Group Chat methods
@@ -142,7 +144,26 @@ export class GroupChatRepository {
     groupId: string,
     limit = 50,
     offset = 0,
+    userId?: string,
   ): Promise<GroupMessage[]> {
+    if (userId) {
+      // Filter out messages deleted by current user
+      return this.groupMessageRepository
+        .createQueryBuilder('message')
+        .leftJoinAndSelect('message.sender', 'sender')
+        .leftJoin(
+          'group_message_deletions', 'gmd',
+          'gmd.group_message_id = message.id AND gmd.user_id = :userId',
+          { userId },
+        )
+        .where('message.groupChatId = :groupId', { groupId })
+        .andWhere('gmd.id IS NULL')
+        .orderBy('message.createdAt', 'DESC')
+        .take(limit)
+        .skip(offset)
+        .getMany();
+    }
+
     return this.groupMessageRepository.find({
       where: { groupChatId: groupId },
       relations: ['sender'],
@@ -154,6 +175,24 @@ export class GroupChatRepository {
 
   async deleteMessage(id: string): Promise<void> {
     await this.groupMessageRepository.delete(id);
+  }
+
+  // Delete message for current user only (soft delete via junction table)
+  async deleteMessageForUser(messageId: string, userId: string): Promise<void> {
+    const deletion = this.groupMessageDeletionRepository.create({
+      groupMessageId: messageId,
+      userId,
+    });
+    await this.groupMessageDeletionRepository.save(deletion);
+  }
+
+  // Unsend (recall) a group message - sets global isUnsent flag
+  async unsendMessage(messageId: string): Promise<GroupMessage | null> {
+    await this.groupMessageRepository.update(messageId, {
+      isUnsent: true,
+      unsentAt: new Date(),
+    });
+    return this.findMessageById(messageId);
   }
 
   async updateLastReadAt(groupId: string, userId: string): Promise<void> {

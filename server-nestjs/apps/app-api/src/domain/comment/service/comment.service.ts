@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, Inject, forwardRef }
 import { CommentRepository } from '../repository/comment.repository';
 import { WebSocketService } from '@app/external-infra/websocket';
 import { NotificationService } from '../../notification/service/notification.service';
+import { RedisTrendingService, InteractionType } from '@app/external-infra/redis';
 import { CreateCommentDto } from '../dto';
 import { User } from '@app/entity';
 
@@ -12,6 +13,7 @@ export class CommentService {
     private readonly webSocketService: WebSocketService,
     @Inject(forwardRef(() => NotificationService))
     private readonly notificationService: NotificationService,
+    private readonly redisTrendingService: RedisTrendingService,
   ) {}
 
   async addComment(userId: string, dto: CreateCommentDto) {
@@ -24,6 +26,13 @@ export class CommentService {
     });
 
     const populatedComment = await this.commentRepository.findById(comment.id);
+
+    // Record trending interaction for comment
+    if (populatedComment?.post?.createdAt) {
+      this.redisTrendingService.recordInteraction(
+        dto.postId, userId, InteractionType.COMMENT, populatedComment.post.createdAt,
+      ).catch(() => {});
+    }
 
     // Notify post owner if someone else commented on their post
     if (populatedComment?.post?.user && populatedComment.post.user.id !== userId) {

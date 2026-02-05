@@ -406,6 +406,7 @@ export class GroupChatService {
       dto.groupId,
       dto.limit,
       dto.offset,
+      userId,
     );
 
     return {
@@ -455,6 +456,70 @@ export class GroupChatService {
     };
   }
 
+  async deleteMessage(userId: string, messageId: string) {
+    const message = await this.groupChatRepository.findMessageById(messageId);
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+
+    // Verify user is a member of the group
+    const isMember = await this.groupChatRepository.isUserMember(message.groupChatId, userId);
+    if (!isMember) {
+      throw new ForbiddenException('You are not a member of this group');
+    }
+
+    await this.groupChatRepository.deleteMessageForUser(messageId, userId);
+
+    return {
+      success: true,
+      message: 'Message deleted',
+    };
+  }
+
+  async unsendMessage(userId: string, messageId: string) {
+    const message = await this.groupChatRepository.findMessageById(messageId);
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+
+    // Only the sender can unsend
+    if (message.senderId !== userId) {
+      throw new ForbiddenException('Only the sender can unsend a message');
+    }
+
+    // Already unsent
+    if (message.isUnsent) {
+      throw new BadRequestException('Message already unsent');
+    }
+
+    // 24-hour limit
+    const hoursSinceSent = (Date.now() - new Date(message.createdAt).getTime()) / (1000 * 60 * 60);
+    if (hoursSinceSent > 24) {
+      throw new BadRequestException('Cannot unsend messages older than 24 hours');
+    }
+
+    const updatedMessage = await this.groupChatRepository.unsendMessage(messageId);
+
+    // Notify all group members except sender
+    const members = await this.groupChatRepository.getGroupMembers(message.groupChatId);
+    for (const member of members) {
+      if (member.userId !== userId) {
+        this.webSocketService.sendToUser(member.userId, SocketEvent.GROUP_MESSAGE_UNSENT, {
+          groupId: message.groupChatId,
+          messageId,
+          unsentByUserId: userId,
+          unsentAt: updatedMessage.unsentAt,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Message unsent',
+      data: this.formatMessageResponse(updatedMessage),
+    };
+  }
+
   private formatGroupResponse(group: any) {
     if (!group) return null;
     return {
@@ -489,9 +554,11 @@ export class GroupChatService {
     return {
       id: message.id,
       groupChatId: message.groupChatId,
-      content: message.content,
-      mediaUrl: message.mediaUrl,
+      content: message.isUnsent ? null : message.content,
+      mediaUrl: message.isUnsent ? null : message.mediaUrl,
       messageType: message.messageType,
+      isUnsent: message.isUnsent || false,
+      unsentAt: message.unsentAt ? new Date(message.unsentAt).toISOString() : null,
       sender: message.sender ? {
         id: message.sender.id,
         fullName: message.sender.fullName,

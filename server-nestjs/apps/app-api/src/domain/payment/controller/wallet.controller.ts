@@ -26,9 +26,13 @@ export class WalletController {
   @Get('transactions')
   async getTransactions(
     @CurrentUser() user: CurrentUserPayload,
-    @Query('limit') limit?: number,
-    @Query('offset') offset?: number,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
-    return this.walletService.getTransactions(user.id, limit, offset);
+    return this.walletService.getTransactions(
+      user.id,
+      limit ? Number(limit) : undefined,
+      offset ? Number(offset) : undefined,
+    );
   }
 }
