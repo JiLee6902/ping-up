@@ -1,17 +1,23 @@
 # PingUp
 
-Ung dung mang xa hoi voi tinh nang nhan tin thoi gian thuc.
+A full-featured social networking application with real-time messaging.
 
 ## Overview
 
-PingUp la mot ung dung mang xa hoi day du tinh nang bao gom:
-- Dang bai viet, hinh anh, video
-- Stories (tu dong xoa sau 24h)
-- Nhan tin thoi gian thuc (1-1 va nhom)
-- Theo doi, ket ban
-- Thong bao push
-- Tim kiem nguoi dung va bai viet
-- Xac thuc 2 yeu to (2FA)
+PingUp is a comprehensive social networking platform featuring:
+- Posts with images and videos
+- Stories (auto-delete after 24 hours)
+- Real-time messaging (1-1 and group chat)
+- End-to-end encryption (E2EE)
+- Voice messages with AI transcription
+- AI Chatbot
+- Follow and friend connections
+- Push notifications
+- User and post search
+- Two-factor authentication (2FA)
+- Guest login
+- VNPAY payment + Premium subscription
+- Monitoring with Prometheus + Grafana
 
 ## Tech Stack
 
@@ -23,17 +29,24 @@ PingUp la mot ung dung mang xa hoi day du tinh nang bao gom:
 - **Socket.IO Client** - Real-time
 - **Axios** - HTTP client
 - **Lucide React** - Icons
+- **Web Crypto API** - E2E Encryption
 
 ### Server
 - **NestJS 10** - Framework
 - **PostgreSQL 15** - Database
 - **TypeORM** - ORM
-- **Redis 7** - Cache & Session
+- **Redis 7** - Cache, Rate Limiting, Presence, Trending
 - **Apache Kafka** - Message broker & Event streaming
 - **Bull** - Job queue
 - **Socket.IO** - WebSocket
 - **JWT + Passport** - Auth
 - **ImageKit / S3** - File storage
+- **Groq AI** - Whisper transcription + LLaMA chatbot
+- **VNPAY** - Payment gateway
+
+### Monitoring
+- **Prometheus** - Metrics collection
+- **Grafana** - Visualization & Dashboards
 
 ## Project Structure
 
@@ -45,6 +58,8 @@ pingup-full-stack/
 │   │   ├── app/           # Redux store
 │   │   ├── components/    # UI components
 │   │   ├── features/      # Redux slices
+│   │   ├── hooks/         # Custom hooks (useE2EE)
+│   │   ├── utils/         # Crypto utilities
 │   │   ├── pages/         # Route pages
 │   │   └── App.jsx        # Root component
 │   └── package.json
@@ -57,7 +72,11 @@ pingup-full-stack/
 │   ├── libs/
 │   │   ├── entity/        # TypeORM entities
 │   │   ├── enum/          # Shared enums
-│   │   └── external-infra/# Redis, Kafka, WebSocket, Email
+│   │   ├── shared-libs/   # Guards, Decorators, Filters
+│   │   └── external-infra/# Redis, Kafka, WebSocket, Prometheus
+│   ├── monitoring/
+│   │   ├── prometheus/    # Prometheus config & alert rules
+│   │   └── grafana/       # Grafana dashboards & datasources
 │   ├── docker-compose.yml
 │   └── nginx.conf
 │
@@ -87,7 +106,7 @@ cd server-nestjs
 # Install dependencies
 npm install
 
-# Start infrastructure (PostgreSQL, Redis, Kafka)
+# Start infrastructure (PostgreSQL, Redis, Kafka, Prometheus, Grafana)
 docker-compose up -d
 
 # Setup environment
@@ -117,9 +136,13 @@ npm run dev
 
 ### 4. Access Application
 
-- **Client**: http://localhost:5173
-- **API**: http://localhost:4000
-- **Kafka UI**: http://localhost:8080
+| Service | URL | Description |
+|---------|-----|-------------|
+| Client | http://localhost:5173 | React frontend |
+| API | http://localhost:4000 | NestJS backend |
+| Kafka UI | http://localhost:8080 | Kafka management |
+| Prometheus | http://localhost:9090 | Metrics & queries |
+| Grafana | http://localhost:3000 | Dashboards (admin/admin) |
 
 ## Environment Variables
 
@@ -161,6 +184,15 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=
 SMTP_PASS=
+
+# Groq AI (optional)
+GROQ_API_KEY=
+
+# VNPAY (optional)
+VNPAY_TMN_CODE=
+VNPAY_HASH_SECRET=
+VNPAY_URL=
+VNPAY_RETURN_URL=
 ```
 
 ## Development
@@ -187,6 +219,7 @@ npm run migration:generate   # Generate migration
 
 ### Authentication
 - Email/Password login
+- Guest login (limited features)
 - JWT tokens with refresh
 - Two-factor authentication (2FA)
 - Password reset via email
@@ -197,13 +230,28 @@ npm run migration:generate   # Generate migration
 - Stories (24h expiry)
 - Follow/unfollow users
 - Friend connections
+- Trending posts (time-decay algorithm)
 
 ### Messaging
 - Real-time 1-1 chat
 - Group chat
+- End-to-end encryption (E2EE)
+- Voice messages with AI transcription
 - Message requests
+- Message deletion/unsend
 - Read receipts
 - Typing indicators
+
+### AI Features
+- Voice message transcription (Groq Whisper)
+- AI Chatbot (Groq LLaMA 3.3 70B)
+- Vietnamese language support
+
+### Payment
+- VNPAY integration
+- Premium subscription (Monthly/Yearly)
+- Coin wallet system
+- Transaction history
 
 ### Notifications
 - Push notifications (via Kafka)
@@ -215,6 +263,43 @@ npm run migration:generate   # Generate migration
 - User search
 - Hashtag search
 - Advanced filters
+
+### Security
+- Rate limiting (Redis sliding window)
+- E2E encryption for messages
+- 2FA with TOTP
+- JWT with refresh token rotation
+
+## Monitoring
+
+### Prometheus Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `http_requests_total` | Counter | Total HTTP requests |
+| `http_request_duration_seconds` | Histogram | Request latency |
+| `http_requests_in_flight` | Gauge | Active requests |
+| `websocket_connections_active` | Gauge | WebSocket connections |
+| `websocket_events_total` | Counter | WebSocket events |
+
+### Grafana Dashboards
+
+Pre-configured dashboard includes:
+- Request Rate & Error Rate
+- Response Time Percentiles (p50, p95, p99)
+- Top Routes by Traffic
+- WebSocket Connections
+- System Resources (CPU, Memory)
+- Service Health Status
+
+### Alert Rules
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| ServiceDown | Service unavailable > 1min | Critical |
+| HighErrorRate | Error rate > 5% for 2min | Warning |
+| HighResponseTime | p95 > 2s for 5min | Warning |
+| HighMemoryUsage | RSS > 850MB for 5min | Warning |
 
 ## Kafka Topics
 
@@ -255,7 +340,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ### Vercel (Client)
 
-Client duoc deploy tren Vercel. Config trong `client/vercel.json`.
+Client is deployed on Vercel. Configuration in `client/vercel.json`.
 
 ## Architecture
 
@@ -277,6 +362,13 @@ Client duoc deploy tren Vercel. Config trong `client/vercel.json`.
 │ Notification│     │   Cronjob   │  │  PostgreSQL │
 │  Consumer   │     │   Worker    │  │  (Database) │
 └─────────────┘     └─────────────┘  └─────────────┘
+          │                │                │
+          └────────────────┼────────────────┘
+                           ▼
+                    ┌─────────────┐     ┌─────────────┐
+                    │ Prometheus  │────▶│   Grafana   │
+                    │  (Metrics)  │     │    (UI)     │
+                    └─────────────┘     └─────────────┘
 ```
 
 ### Event-Driven Flow
@@ -286,6 +378,15 @@ Client duoc deploy tren Vercel. Config trong `client/vercel.json`.
 3. **Consume Event** → Notification service consumes from Kafka
 4. **Process** → Send push notification / email / store in DB
 5. **Real-time** → Socket.IO broadcasts to connected clients
+
+### Monitoring Flow
+
+1. **Request** → MetricsInterceptor records metrics
+2. **Expose** → NestJS exposes /metrics endpoint
+3. **Scrape** → Prometheus scrapes metrics every 15s
+4. **Store** → Prometheus stores in time-series database
+5. **Query** → Grafana queries Prometheus with PromQL
+6. **Visualize** → Grafana renders charts and dashboards
 
 ## License
 
