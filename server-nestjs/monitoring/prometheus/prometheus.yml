@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "rules/*.yml"
+
+scrape_configs:
+  - job_name: "app-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["app-api:4000"]
+        labels:
+          service: app-api
+
+  - job_name: "notification"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["notification:4001"]
+        labels:
+          service: notification
+
+  - job_name: "cronjob-worker"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["cronjob-worker:4002"]
+        labels:
+          service: cronjob-worker
