@@ -103,8 +103,12 @@ jobs:
             echo "Pulling pingup-${{ github.event.inputs.app }}..."
             docker compose --env-file .env.production -f docker-compose.prod.yml pull ${{ github.event.inputs.app }}
 
+            echo "Stopping old container..."
+            docker compose --env-file .env.production -f docker-compose.prod.yml stop ${{ github.event.inputs.app }} || true
+            docker compose --env-file .env.production -f docker-compose.prod.yml rm -f ${{ github.event.inputs.app }} || true
+
             echo "Restarting ${{ github.event.inputs.app }}..."
-            docker compose --env-file .env.production -f docker-compose.prod.yml up -d ${{ github.event.inputs.app }}
+            docker compose --env-file .env.production -f docker-compose.prod.yml up -d --force-recreate ${{ github.event.inputs.app }}
 
             echo "Cleanup old images..."
             docker image prune -af --filter "until=72h"
@@ -155,8 +159,12 @@ jobs:
             echo "Pulling all services..."
             docker compose --env-file .env.production -f docker-compose.prod.yml pull app-api notification cronjob-worker
 
+            echo "Stopping old containers..."
+            docker compose --env-file .env.production -f docker-compose.prod.yml stop app-api notification cronjob-worker || true
+            docker compose --env-file .env.production -f docker-compose.prod.yml rm -f app-api notification cronjob-worker || true
+
             echo "Restarting all services..."
-            docker compose --env-file .env.production -f docker-compose.prod.yml up -d app-api notification cronjob-worker
+            docker compose --env-file .env.production -f docker-compose.prod.yml up -d --force-recreate app-api notification cronjob-worker
 
             echo "Cleanup old images..."
             docker image prune -af --filter "until=72h"
