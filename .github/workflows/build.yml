@@ -1,6 +1,12 @@
 name: Build Docker Images
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'server-nestjs/**'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
     inputs:
       app:
@@ -12,13 +18,14 @@ on:
           - notification
           - cronjob-worker
           - all
+        default: all
 
 env:
   REGISTRY: ${{ secrets.DOCKER_USERNAME }}
 
 jobs:
   build-single:
-    if: ${{ github.event.inputs.app != 'all' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.app != 'all' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -65,7 +72,7 @@ jobs:
           echo "**Image:** ${{ env.REGISTRY }}/pingup-${{ github.event.inputs.app }}:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
   build-all:
-    if: ${{ github.event.inputs.app == 'all' }}
+    if: ${{ github.event_name == 'push' || github.event.inputs.app == 'all' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
