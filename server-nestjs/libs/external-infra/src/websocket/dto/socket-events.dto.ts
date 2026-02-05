@@ -33,6 +33,9 @@ export enum SocketEvent {
   GROUP_MEMBER_ADDED = 'groupMemberAdded',
   GROUP_MEMBER_REMOVED = 'groupMemberRemoved',
   GROUP_MEMBER_ROLE_UPDATED = 'groupMemberRoleUpdated',
+  // Message Delete/Unsend
+  MESSAGE_UNSENT = 'messageUnsent',
+  GROUP_MESSAGE_UNSENT = 'groupMessageUnsent',
 }
 
 export interface SocketEventDto {
@@ -130,5 +133,16 @@ export interface SocketEventDto {
       profilePicture?: string;
     } | null;
     createdAt: Date;
+  };
+  messageUnsent: {
+    messageId: string;
+    unsentByUserId: string;
+    unsentAt: Date;
+  };
+  groupMessageUnsent: {
+    groupId: string;
+    messageId: string;
+    unsentByUserId: string;
+    unsentAt: Date;
   };
 }

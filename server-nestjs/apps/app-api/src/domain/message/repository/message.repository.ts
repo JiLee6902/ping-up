@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, MoreThan } from 'typeorm';
-import { Message, User, ChatSettings, Connection } from '@app/entity';
+import { Message, User, ChatSettings, Connection, MessageDeletion } from '@app/entity';
 import { ConnectionStatus } from '@app/enum';
 
 @Injectable()
@@ -15,6 +15,8 @@ export class MessageRepository {
     private readonly chatSettingsRepository: Repository<ChatSettings>,
     @InjectRepository(Connection)
     private readonly connectionRepository: Repository<Connection>,
+    @InjectRepository(MessageDeletion)
+    private readonly messageDeletionRepository: Repository<MessageDeletion>,
   ) {}
 
   async create(messageData: Partial<Message>): Promise<Message> {
@@ -44,10 +46,16 @@ export class MessageRepository {
       .createQueryBuilder('message')
       .leftJoinAndSelect('message.fromUser', 'fromUser')
       .leftJoinAndSelect('message.toUser', 'toUser')
+      .leftJoin(
+        'message_deletions', 'md',
+        'md.message_id = message.id AND md.user_id = :currentUserId',
+        { currentUserId: userId1 },
+      )
       .where(
         '((message.fromUserId = :userId1 AND message.toUserId = :userId2) OR (message.fromUserId = :userId2 AND message.toUserId = :userId1))',
         { userId1, userId2 },
-      );
+      )
+      .andWhere('md.id IS NULL'); // Exclude messages deleted by current user
 
     // If chat was deleted, only show messages after deletedAt
     if (settings?.deletedAt) {
@@ -218,6 +226,15 @@ export class MessageRepository {
     return this.chatSettingsRepository.save(settings);
   }
 
+  async countMessagesSentByUser(fromUserId: string, toUserId: string): Promise<number> {
+    return this.messageRepository.count({
+      where: {
+        fromUser: { id: fromUserId },
+        toUser: { id: toUserId },
+      },
+    });
+  }
+
   async findUserById(userId: string): Promise<User | null> {
     return this.userRepository.findOne({
       where: { id: userId },
@@ -307,6 +324,24 @@ export class MessageRepository {
       isMessageRequest: true,
       isRequestAccepted: false,
     });
+  }
+
+  // Delete message for current user only (soft delete via junction table)
+  async deleteMessageForUser(messageId: string, userId: string): Promise<void> {
+    const deletion = this.messageDeletionRepository.create({
+      messageId,
+      userId,
+    });
+    await this.messageDeletionRepository.save(deletion);
+  }
+
+  // Unsend (recall) a message - sets global isUnsent flag
+  async unsendMessage(messageId: string): Promise<Message | null> {
+    await this.messageRepository.update(messageId, {
+      isUnsent: true,
+      unsentAt: new Date(),
+    });
+    return this.findById(messageId);
   }
 
   // Get recent chats excluding message requests (for recipient only)

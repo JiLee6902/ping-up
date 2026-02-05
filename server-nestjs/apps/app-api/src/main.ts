@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from '@app/shared-libs';
+import { MetricsInterceptor } from '@app/external-infra/prometheus';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -15,8 +16,8 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Global prefix
-  app.setGlobalPrefix('api');
+  // Global prefix (exclude /metrics for Prometheus scraping)
+  app.setGlobalPrefix('api', { exclude: ['metrics'] });
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -28,6 +29,9 @@ async function bootstrap() {
       },
     }),
   );
+
+  // Global metrics interceptor
+  app.useGlobalInterceptors(app.get(MetricsInterceptor));
 
   // Global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());

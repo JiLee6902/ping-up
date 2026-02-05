@@ -6,6 +6,7 @@ import { BullModule } from '@nestjs/bull';
 
 import { dataSourceOptions } from '@app/entity';
 import { RedisModule } from '@app/external-infra/redis';
+import { MetricsModule } from '@app/external-infra/prometheus';
 import { WebSocketModule } from '@app/external-infra/websocket';
 import { EmailModule } from '@app/external-infra/email';
 import { VnpayModule } from '@app/external-infra/vnpay';
@@ -22,6 +23,7 @@ import { NotificationModule } from './domain/notification/notification.module';
 import { ReportModule } from './domain/report/report.module';
 import { GroupChatModule } from './domain/group-chat/group-chat.module';
 import { PaymentModule } from './domain/payment/payment.module';
+import { EncryptionModule } from './domain/encryption/encryption.module';
 import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 
@@ -73,6 +75,7 @@ import { JobsModule } from './jobs/jobs.module';
 
     // External infrastructure
     RedisModule,
+    MetricsModule,
     WebSocketModule,
     EmailModule,
     VnpayModule,
@@ -90,6 +93,7 @@ import { JobsModule } from './jobs/jobs.module';
     ReportModule,
     GroupChatModule,
     PaymentModule,
+    EncryptionModule,
 
     // Health check
     HealthModule,

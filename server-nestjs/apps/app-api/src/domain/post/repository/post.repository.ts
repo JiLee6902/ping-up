@@ -26,9 +26,21 @@ export class PostRepository {
     private readonly redisLikeService: RedisLikeService,
   ) {}
 
+  async findUserById(userId: string): Promise<User | null> {
+    return this.userRepository.findOne({ where: { id: userId } });
+  }
+
   async create(postData: Partial<Post>): Promise<Post> {
     const post = this.postRepository.create(postData);
     return this.postRepository.save(post);
+  }
+
+  async findByIds(ids: string[]): Promise<Post[]> {
+    if (ids.length === 0) return [];
+    return this.postRepository.find({
+      where: { id: In(ids) },
+      relations: ['user', 'likes', 'originalPost', 'originalPost.user'],
+    });
   }
 
   async findById(id: string): Promise<Post | null> {

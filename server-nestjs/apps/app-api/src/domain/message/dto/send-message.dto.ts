@@ -13,4 +13,12 @@ export class SendMessageDto {
   @IsOptional()
   @IsEnum(MessageType)
   messageType?: MessageType;
+
+  @IsOptional()
+  @IsString()
+  encrypted?: string;
+
+  @IsOptional()
+  @IsString()
+  iv?: string;
 }

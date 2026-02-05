@@ -9,7 +9,7 @@ import {
   UploadedFiles,
 } from '@nestjs/common';
 import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
-import { JwtAuthGuard, User as CurrentUser } from '@app/shared-libs';
+import { JwtAuthGuard, User as CurrentUser, RateLimit, RedisThrottlerGuard } from '@app/shared-libs';
 import { MessageService } from '../service/message.service';
 import { SendMessageDto, GetMessagesDto, UpdateChatSettingsDto, GetChatSettingsDto } from '../dto';
 
@@ -25,6 +25,8 @@ export class MessageController {
   constructor(private readonly messageService: MessageService) {}
 
   @Post('send')
+  @UseGuards(RedisThrottlerGuard)
+  @RateLimit({ action: 'message_send', maxRequests: 60, windowMs: 60 * 1000, identifierType: 'user' })
   @UseInterceptors(FileFieldsInterceptor([
     { name: 'image', maxCount: 1 },
     { name: 'audio', maxCount: 1 },
@@ -142,5 +144,21 @@ export class MessageController {
     @Body() dto: { fromUserId: string },
   ) {
     return this.messageService.declineMessageRequest(user.id, dto.fromUserId);
+  }
+
+  @Post('delete')
+  async deleteMessage(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: { messageId: string },
+  ) {
+    return this.messageService.deleteMessage(user.id, dto.messageId);
+  }
+
+  @Post('unsend')
+  async unsendMessage(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: { messageId: string },
+  ) {
+    return this.messageService.unsendMessage(user.id, dto.messageId);
   }
 }

@@ -143,4 +143,20 @@ export class GroupChatController {
   ) {
     return this.groupChatService.markAsRead(user.id, dto.groupId);
   }
+
+  @Post('message/delete')
+  async deleteMessage(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: { messageId: string },
+  ) {
+    return this.groupChatService.deleteMessage(user.id, dto.messageId);
+  }
+
+  @Post('message/unsend')
+  async unsendMessage(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: { messageId: string },
+  ) {
+    return this.groupChatService.unsendMessage(user.id, dto.messageId);
+  }
 }

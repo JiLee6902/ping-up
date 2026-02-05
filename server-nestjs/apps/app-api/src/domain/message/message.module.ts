@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Message, User, ChatSettings, ChatEvent, Connection } from '@app/entity';
+import { Message, User, ChatSettings, ChatEvent, Connection, MessageDeletion } from '@app/entity';
 import { WebSocketModule } from '@app/external-infra/websocket';
 import { MessageController } from './controller/message.controller';
 import { MessageService } from './service/message.service';
@@ -8,7 +8,7 @@ import { MessageRepository } from './repository/message.repository';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Message, User, ChatSettings, ChatEvent, Connection]),
+    TypeOrmModule.forFeature([Message, User, ChatSettings, ChatEvent, Connection, MessageDeletion]),
     WebSocketModule,
   ],
   controllers: [MessageController],

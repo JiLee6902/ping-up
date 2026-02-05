@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import { Counter, Gauge } from 'prom-client';
 import { Repository } from 'typeorm';
 import { Server, Socket } from 'socket.io';
 import { User } from '@app/entity';
@@ -14,6 +16,12 @@ export class WebSocketService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @Optional()
+    @InjectMetric('websocket_connections_active')
+    private readonly connectionsGauge?: Gauge<string>,
+    @Optional()
+    @InjectMetric('websocket_events_total')
+    private readonly eventsCounter?: Counter<string>,
   ) {}
 
   setServer(server: Server) {
@@ -22,12 +30,14 @@ export class WebSocketService {
 
   addClient(userId: string, client: Socket) {
     this.clients.set(userId, client);
+    this.connectionsGauge?.set(this.clients.size);
     // Update lastActivityAt when user connects
     this.updateLastActivity(userId);
   }
 
   removeClient(userId: string) {
     this.clients.delete(userId);
+    this.connectionsGauge?.set(this.clients.size);
     // Update lastActivityAt when user disconnects
     this.updateLastActivity(userId);
   }
@@ -49,6 +59,7 @@ export class WebSocketService {
   }
 
   sendToUser(userId: string, event: SocketEvent, data: unknown) {
+    this.eventsCounter?.inc({ event });
     const client = this.clients.get(userId);
     if (client) {
       client.emit(event, data);

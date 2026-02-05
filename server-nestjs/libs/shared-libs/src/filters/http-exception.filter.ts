@@ -31,7 +31,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
     /backup/i,
     /debug/i,
     /trace/i,
-    /metrics/i,
     /\.xml$/i,
     /\.sql$/i,
     /\.bak$/i,

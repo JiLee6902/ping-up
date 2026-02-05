@@ -5,8 +5,9 @@ import { WebSocketService } from '@app/external-infra/websocket';
 import { NotificationService } from '../../notification/service/notification.service';
 import { UserService } from '../../user/service/user.service';
 import { CreatePostDto, LikePostDto, RepostDto, AdvancedSearchDto, ReactPostDto, VotePollDto } from '../dto';
-import { PostType, ReactionType } from '@app/enum';
+import { PostType, ReactionType, SubscriptionTier } from '@app/enum';
 import { User } from '@app/entity';
+import { RedisTrendingService, InteractionType } from '@app/external-infra/redis';
 
 const MAX_IMAGES_PER_POST = 4;
 const MAX_VIDEO_SIZE_MB = 100;
@@ -22,6 +23,7 @@ export class PostService {
     private readonly notificationService: NotificationService,
     @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
+    private readonly redisTrendingService: RedisTrendingService,
   ) {}
 
   async addPost(
@@ -45,6 +47,14 @@ export class PostService {
     // Poll posts cannot have images or video
     if (hasPoll && ((files && files.length > 0) || videoFile)) {
       throw new BadRequestException('Poll posts cannot have images or video');
+    }
+
+    // Polls require Premium subscription
+    if (hasPoll) {
+      const user = await this.postRepository.findUserById(userId);
+      if (user?.subscriptionTier !== SubscriptionTier.PREMIUM) {
+        throw new ForbiddenException('Polls are a Premium feature. Upgrade to Premium to create polls.');
+      }
     }
 
     if (files && files.length > MAX_IMAGES_PER_POST) {
@@ -192,6 +202,49 @@ export class PostService {
     };
   }
 
+  async getTrendingPosts(userId: string | null, limit?: number | string, offset?: number | string) {
+    const parsedLimit = limit ? parseInt(String(limit), 10) : 20;
+    const parsedOffset = offset ? parseInt(String(offset), 10) : 0;
+
+    // Get trending post IDs from Redis sorted set
+    const trendingPosts = await this.redisTrendingService.getTrendingPosts(parsedLimit, parsedOffset);
+
+    if (trendingPosts.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const postIds = trendingPosts.map(tp => tp.postId);
+
+    // Load full post data from DB
+    const posts = await this.postRepository.findByIds(postIds);
+
+    // Preserve trending order (sorted by score)
+    const postMap = new Map(posts.map(p => [p.id, p]));
+    const orderedPosts = postIds
+      .map(id => postMap.get(id))
+      .filter((p): p is NonNullable<typeof p> => p != null);
+
+    let repostStatusMap = new Map<string, boolean>();
+    let bookmarkStatusMap = new Map<string, boolean>();
+
+    if (userId) {
+      const originalPostIds = orderedPosts
+        .filter(p => p.postType !== PostType.REPOST)
+        .map(p => p.id);
+      const allPostIds = orderedPosts.map(p => p.id);
+
+      [repostStatusMap, bookmarkStatusMap] = await Promise.all([
+        this.postRepository.getRepostStatusForPosts(userId, originalPostIds),
+        this.postRepository.getBookmarkStatusForPosts(userId, allPostIds),
+      ]);
+    }
+
+    return {
+      success: true,
+      data: orderedPosts.map((post) => this.formatPostResponse(post, userId, repostStatusMap, bookmarkStatusMap)),
+    };
+  }
+
   async getLikedPosts(userId: string, targetUserId: string, limit?: number | string, offset?: number | string) {
     const parsedLimit = limit ? parseInt(String(limit), 10) : 50;
     const parsedOffset = offset ? parseInt(String(offset), 10) : 0;
@@ -218,6 +271,13 @@ export class PostService {
   async likePost(userId: string, dto: LikePostDto) {
     try {
       const { post, isLiked, likerUser } = await this.postRepository.toggleLike(dto.postId, userId);
+
+      // Record trending interaction on like
+      if (isLiked) {
+        this.redisTrendingService.recordInteraction(
+          post.id, userId, InteractionType.LIKE, post.createdAt,
+        ).catch(() => {});
+      }
 
       // Notify post owner if someone else liked their post
       if (post.user && post.user.id !== userId) {
@@ -290,6 +350,13 @@ export class PostService {
 
     const { reposterUser } = await this.postRepository.createRepost(userId, targetPostId);
 
+    // Record trending interaction for share
+    if (targetPost?.createdAt) {
+      this.redisTrendingService.recordInteraction(
+        targetPostId, userId, InteractionType.SHARE, targetPost.createdAt,
+      ).catch(() => {});
+    }
+
     // Create notification for the post owner
     if (targetPost?.user?.id) {
       this.notificationService.createRepostNotification(
@@ -348,6 +415,9 @@ export class PostService {
     }
 
     await this.postRepository.deletePost(postId);
+
+    // Remove from trending leaderboard
+    this.redisTrendingService.removePost(postId).catch(() => {});
 
     return {
       success: true,

@@ -11,6 +11,7 @@ import {
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { WebSocketService } from './websocket.service';
+import { RedisPresenceService } from '../redis/service/redis-presence.service';
 
 @WebSocketGateway({
   cors: {
@@ -24,7 +25,10 @@ export class WebSocketGatewayService
   @WebSocketServer() server: Server;
   private readonly logger = new Logger(WebSocketGatewayService.name);
 
-  constructor(private readonly webSocketService: WebSocketService) {}
+  constructor(
+    private readonly webSocketService: WebSocketService,
+    private readonly redisPresenceService: RedisPresenceService,
+  ) {}
 
   afterInit(server: Server) {
     this.webSocketService.setServer(server);
@@ -37,6 +41,8 @@ export class WebSocketGatewayService
       this.webSocketService.addClient(userId, client);
       // Broadcast that user is online
       this.webSocketService.broadcastOnlineStatus(userId, true);
+      // Record presence in Redis (distributed, survives restarts)
+      this.redisPresenceService.heartbeat(userId).catch(() => {});
       this.logger.debug(`Client connected: ${client.id}, userId: ${userId}`);
     }
   }
@@ -47,8 +53,19 @@ export class WebSocketGatewayService
       this.webSocketService.removeClient(userId);
       // Broadcast that user is offline
       this.webSocketService.broadcastOnlineStatus(userId, false);
+      // Mark offline in Redis
+      this.redisPresenceService.goOffline(userId).catch(() => {});
       this.logger.debug(`Client disconnected: ${client.id}, userId: ${userId}`);
     }
+  }
+
+  @SubscribeMessage('heartbeat')
+  handleHeartbeat(@ConnectedSocket() client: Socket) {
+    const userId = client.handshake.query.userId as string;
+    if (userId) {
+      this.redisPresenceService.heartbeat(userId).catch(() => {});
+    }
+    return { event: 'heartbeat_ack' };
   }
 
   @SubscribeMessage('join')

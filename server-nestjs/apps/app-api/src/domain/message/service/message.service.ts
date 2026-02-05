@@ -52,10 +52,21 @@ export class MessageService {
       transcription = transcriptionResult || undefined;
     }
 
-    // Check if recipient is private and if sender is not following them
+    // Check if recipient exists
     const recipient = await this.messageRepository.findUserById(dto.toUserId);
     if (!recipient) {
       throw new BadRequestException('User not found');
+    }
+
+    // Guest message limit: guests can only send 3 messages to bot users
+    const sender = await this.messageRepository.findUserById(userId);
+    if (sender?.isGuest && recipient.isBot) {
+      const messageCount = await this.messageRepository.countMessagesSentByUser(userId, dto.toUserId);
+      if (messageCount >= 3) {
+        throw new ForbiddenException(
+          'Guest message limit reached. Please register to continue chatting.',
+        );
+      }
     }
 
     // Check if there's an existing accepted conversation
@@ -83,6 +94,8 @@ export class MessageService {
       seen: false,
       isMessageRequest,
       isRequestAccepted: !isMessageRequest,
+      encrypted: dto.encrypted === 'true',
+      encryptionIv: dto.iv || undefined,
     });
 
     // Get full message with relations
@@ -243,12 +256,16 @@ export class MessageService {
   private formatMessageResponse(message: any) {
     return {
       id: message.id,
-      text: message.text,
-      mediaUrl: message.mediaUrl,
+      text: message.isUnsent ? null : message.text,
+      mediaUrl: message.isUnsent ? null : message.mediaUrl,
       messageType: message.messageType,
-      transcription: message.transcription || null,
+      transcription: message.isUnsent ? null : (message.transcription || null),
       seen: message.seen,
       seenAt: message.seenAt ? new Date(message.seenAt).toISOString() : null,
+      encrypted: message.encrypted || false,
+      encryptionIv: message.isUnsent ? null : (message.encryptionIv || null),
+      isUnsent: message.isUnsent || false,
+      unsentAt: message.unsentAt ? new Date(message.unsentAt).toISOString() : null,
       fromUser: {
         id: message.fromUser.id,
         fullName: message.fromUser.fullName,
@@ -552,6 +569,64 @@ export class MessageService {
     return {
       success: true,
       message: 'Chat deleted',
+    };
+  }
+
+  async deleteMessage(userId: string, messageId: string) {
+    const message = await this.messageRepository.findById(messageId);
+    if (!message) {
+      throw new BadRequestException('Message not found');
+    }
+
+    // Verify user is part of this conversation
+    if (message.fromUser.id !== userId && message.toUser.id !== userId) {
+      throw new ForbiddenException('You cannot delete this message');
+    }
+
+    await this.messageRepository.deleteMessageForUser(messageId, userId);
+
+    return {
+      success: true,
+      message: 'Message deleted',
+    };
+  }
+
+  async unsendMessage(userId: string, messageId: string) {
+    const message = await this.messageRepository.findById(messageId);
+    if (!message) {
+      throw new BadRequestException('Message not found');
+    }
+
+    // Only the sender can unsend
+    if (message.fromUser.id !== userId) {
+      throw new ForbiddenException('Only the sender can unsend a message');
+    }
+
+    // Already unsent
+    if (message.isUnsent) {
+      throw new BadRequestException('Message already unsent');
+    }
+
+    // 24-hour limit
+    const hoursSinceSent = (Date.now() - new Date(message.createdAt).getTime()) / (1000 * 60 * 60);
+    if (hoursSinceSent > 24) {
+      throw new BadRequestException('Cannot unsend messages older than 24 hours');
+    }
+
+    const updatedMessage = await this.messageRepository.unsendMessage(messageId);
+
+    // Notify the other user via WebSocket
+    const recipientId = message.toUser.id;
+    this.webSocketService.sendToUser(recipientId, SocketEvent.MESSAGE_UNSENT, {
+      messageId,
+      unsentByUserId: userId,
+      unsentAt: updatedMessage.unsentAt,
+    });
+
+    return {
+      success: true,
+      message: 'Message unsent',
+      data: this.formatMessageResponse(updatedMessage),
     };
   }
 }
