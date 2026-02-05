@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 note.txt
+noted.txt
+
 
 # Environment files
 .env
