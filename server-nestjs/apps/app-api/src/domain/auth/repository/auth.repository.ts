@@ -68,6 +68,24 @@ export class AuthRepository {
     );
   }
 
+  // Guest user methods
+  async findGuestUserById(id: string): Promise<User | null> {
+    return this.userRepository.findOne({ where: { id, isGuest: true } });
+  }
+
+  async incrementGuestVisitCount(userId: string): Promise<void> {
+    await this.userRepository.increment({ id: userId }, 'guestVisitCount', 1);
+  }
+
+  async convertGuestToRegular(userId: string, data: Partial<User>): Promise<User> {
+    await this.userRepository.update(userId, {
+      ...data,
+      isGuest: false,
+      guestVisitCount: 0,
+    });
+    return this.userRepository.findOneOrFail({ where: { id: userId } });
+  }
+
   // Two-Factor Authentication methods
   async updateTwoFactorSecret(userId: string, secret: string): Promise<void> {
     await this.userRepository.update(userId, { twoFactorSecret: secret });

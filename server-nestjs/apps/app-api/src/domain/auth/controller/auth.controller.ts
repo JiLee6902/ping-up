@@ -8,8 +8,8 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { AuthService } from '../service/auth.service';
-import { RegisterDto, LoginDto, RefreshTokenDto, VerifyTwoFactorDto, LoginTwoFactorDto } from '../dto';
-import { JwtAuthGuard, Public, User as CurrentUser } from '@app/shared-libs';
+import { RegisterDto, LoginDto, RefreshTokenDto, VerifyTwoFactorDto, LoginTwoFactorDto, GuestLoginDto } from '../dto';
+import { JwtAuthGuard, Public, User as CurrentUser, RateLimit, RedisThrottlerGuard } from '@app/shared-libs';
 
 interface CurrentUserPayload {
   id: string;
@@ -23,15 +23,28 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  async register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  @UseGuards(RedisThrottlerGuard)
+  @RateLimit({ action: 'register', maxRequests: 3, windowMs: 60 * 60 * 1000, identifierType: 'ip' })
+  async register(@Body() dto: RegisterDto & { guestUserId?: string }) {
+    return this.authService.register(dto, dto.guestUserId);
   }
 
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(RedisThrottlerGuard)
+  @RateLimit({ action: 'login', maxRequests: 5, windowMs: 15 * 60 * 1000, identifierType: 'ip' })
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @Public()
+  @Post('guest')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RedisThrottlerGuard)
+  @RateLimit({ action: 'guest_login', maxRequests: 5, windowMs: 60 * 60 * 1000, identifierType: 'ip' })
+  async guestLogin(@Body() dto: GuestLoginDto) {
+    return this.authService.guestLogin(dto);
   }
 
   @Public()
