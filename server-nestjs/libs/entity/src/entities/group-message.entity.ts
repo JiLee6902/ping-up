@@ -39,6 +39,12 @@ export class GroupMessage extends BaseEntity {
   @Column({ name: 'media_url', nullable: true })
   mediaUrl?: string;
 
+  @Column({ name: 'is_unsent', default: false })
+  isUnsent: boolean;
+
+  @Column({ name: 'unsent_at', type: 'timestamptz', nullable: true })
+  unsentAt?: Date;
+
   @ManyToOne(() => GroupChat, (groupChat) => groupChat.messages, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'group_chat_id' })
   groupChat: GroupChat;
