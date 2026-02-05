@@ -4,10 +4,15 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from '@app/shared-libs';
 import { MetricsInterceptor } from '@app/external-infra/prometheus';
+import { BotBlockerMiddleware } from '@app/shared-libs/middlewares';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+
+  // Bot blocker middleware (block malicious scans)
+  const botBlocker = new BotBlockerMiddleware();
+  app.use(botBlocker.use.bind(botBlocker));
 
   // CORS
   app.enableCors({
