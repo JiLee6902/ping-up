@@ -3,7 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from '@app/shared-libs';
-import { MetricsInterceptor } from '@app/external-infra/prometheus';
+// import { MetricsInterceptor } from '@app/external-infra/prometheus'; // Temporarily disabled
 import { BotBlockerMiddleware } from '@app/shared-libs/middlewares';
 
 async function bootstrap() {
@@ -35,8 +35,8 @@ async function bootstrap() {
     }),
   );
 
-  // Global metrics interceptor
-  app.useGlobalInterceptors(app.get(MetricsInterceptor));
+  // Global metrics interceptor (Temporarily disabled)
+  // app.useGlobalInterceptors(app.get(MetricsInterceptor));
 
   // Global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());

@@ -6,7 +6,7 @@ import { BullModule } from '@nestjs/bull';
 
 import { dataSourceOptions } from '@app/entity';
 import { RedisModule } from '@app/external-infra/redis';
-import { MetricsModule } from '@app/external-infra/prometheus';
+// import { MetricsModule } from '@app/external-infra/prometheus'; // Temporarily disabled
 import { WebSocketModule } from '@app/external-infra/websocket';
 import { EmailModule } from '@app/external-infra/email';
 import { VnpayModule } from '@app/external-infra/vnpay';
@@ -75,7 +75,7 @@ import { JobsModule } from './jobs/jobs.module';
 
     // External infrastructure
     RedisModule,
-    MetricsModule,
+    // MetricsModule, // Temporarily disabled
     WebSocketModule,
     EmailModule,
     VnpayModule,

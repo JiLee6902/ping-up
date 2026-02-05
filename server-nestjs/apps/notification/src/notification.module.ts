@@ -5,7 +5,7 @@ import { BullModule } from '@nestjs/bull';
 import { dataSourceOptions } from '@app/entity';
 import { User } from '@app/entity';
 import { EmailModule } from '@app/external-infra/email';
-import { MetricsModule } from '@app/external-infra/prometheus';
+// import { MetricsModule } from '@app/external-infra/prometheus'; // Temporarily disabled
 import { NOTIFICATION_QUEUE } from '@app/external-infra/queue';
 import { NotificationProcessor } from './notification.processor';
 
@@ -38,7 +38,7 @@ import { NotificationProcessor } from './notification.processor';
       name: NOTIFICATION_QUEUE,
     }),
     EmailModule,
-    MetricsModule,
+    // MetricsModule, // Temporarily disabled
   ],
   providers: [NotificationProcessor],
 })
