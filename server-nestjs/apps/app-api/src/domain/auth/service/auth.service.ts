@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { authenticator } from 'otplib';
 import * as QRCode from 'qrcode';
 import { AuthRepository } from '../repository/auth.repository';
-import { RegisterDto, LoginDto, RefreshTokenDto, VerifyTwoFactorDto, LoginTwoFactorDto } from '../dto';
+import { RegisterDto, LoginDto, RefreshTokenDto, VerifyTwoFactorDto, LoginTwoFactorDto, GuestLoginDto } from '../dto';
 
 export interface TokenResponse {
   accessToken: string;
@@ -36,20 +36,60 @@ export interface AuthResponse {
 
 @Injectable()
 export class AuthService {
+  private static readonly MAX_GUEST_VISITS = 3;
+
   constructor(
     private readonly authRepository: AuthRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<AuthResponse> {
-    // Check if email already exists
+  async register(dto: RegisterDto, guestUserId?: string): Promise<AuthResponse> {
+    // Guest conversion flow
+    if (guestUserId) {
+      const guestUser = await this.authRepository.findGuestUserById(guestUserId);
+      if (guestUser) {
+        const existingEmail = await this.authRepository.findUserByEmail(dto.email);
+        if (existingEmail && existingEmail.id !== guestUser.id) {
+          throw new ConflictException('Email already registered');
+        }
+        const existingUsername = await this.authRepository.findUserByUsername(dto.username);
+        if (existingUsername && existingUsername.id !== guestUser.id) {
+          throw new ConflictException('Username already taken');
+        }
+
+        const hashedPassword = await bcrypt.hash(dto.password, 10);
+        const converted = await this.authRepository.convertGuestToRegular(guestUser.id, {
+          email: dto.email,
+          password: hashedPassword,
+          fullName: dto.fullName,
+          username: dto.username,
+        });
+
+        const tokens = await this.generateTokens(converted.id, converted.email);
+
+        return {
+          success: true,
+          message: 'Account created successfully',
+          data: {
+            user: {
+              id: converted.id,
+              email: converted.email,
+              username: converted.username,
+              fullName: converted.fullName,
+            },
+            tokens,
+          },
+        };
+      }
+    }
+
+    // Standard registration flow
     const existingEmail = await this.authRepository.findUserByEmail(dto.email);
     if (existingEmail) {
       throw new ConflictException('Email already registered');
     }
 
-    // Check if username already exists
     const existingUsername = await this.authRepository.findUserByUsername(dto.username);
     if (existingUsername) {
       throw new ConflictException('Username already taken');
@@ -114,6 +154,71 @@ export class AuthService {
     return {
       success: true,
       message: 'Login successful',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          fullName: user.fullName,
+        },
+        tokens,
+      },
+    };
+  }
+
+  async guestLogin(dto: GuestLoginDto): Promise<AuthResponse> {
+    // Returning guest user
+    if (dto.guestUserId) {
+      const existingGuest = await this.authRepository.findGuestUserById(dto.guestUserId);
+
+      if (existingGuest) {
+        if (existingGuest.guestVisitCount >= AuthService.MAX_GUEST_VISITS) {
+          throw new UnauthorizedException(
+            'Guest access limit reached. Please register to continue using PingUp.',
+          );
+        }
+
+        await this.authRepository.incrementGuestVisitCount(existingGuest.id);
+        const tokens = await this.generateTokens(existingGuest.id, existingGuest.email);
+
+        return {
+          success: true,
+          message: 'Guest login successful',
+          data: {
+            user: {
+              id: existingGuest.id,
+              email: existingGuest.email,
+              username: existingGuest.username,
+              fullName: existingGuest.fullName,
+            },
+            tokens,
+          },
+        };
+      }
+    }
+
+    // New guest user
+    const randomSuffix = Math.floor(10000 + Math.random() * 90000).toString();
+    const guestEmail = `guest_${randomSuffix}@pingup.local`;
+    const guestUsername = `guest_${randomSuffix}`;
+    const guestFullName = `Guest #${randomSuffix}`;
+    const guestPassword = await bcrypt.hash(uuidv4(), 10);
+
+    const user = await this.authRepository.createUser({
+      email: guestEmail,
+      password: guestPassword,
+      fullName: guestFullName,
+      username: guestUsername,
+      bio: 'Guest user exploring PingUp',
+      isGuest: true,
+      guestVisitCount: 1,
+    });
+
+    const tokens = await this.generateTokens(user.id, user.email);
+
+    return {
+      success: true,
+      message: 'Guest account created',
       data: {
         user: {
           id: user.id,
