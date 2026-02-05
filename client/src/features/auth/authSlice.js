@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 
 const TOKEN_KEY = 'accessToken'
 const REFRESH_TOKEN_KEY = 'refreshToken'
+const GUEST_USER_ID_KEY = 'guestUserId'
 
 // Get tokens from localStorage
 const getStoredTokens = () => ({
@@ -23,6 +24,33 @@ const clearTokens = () => {
   localStorage.removeItem(REFRESH_TOKEN_KEY)
 }
 
+// E2EE: Generate identity key pair and upload public key to server
+const setupE2EEKeys = async (userId, accessToken) => {
+  try {
+    const { generateIdentityKeyPair, publicKeyToBase64 } = await import('../../utils/crypto')
+    const { saveIdentityKeyPair, hasIdentityKeys } = await import('../../utils/keyStore')
+
+    // Skip if keys already exist in IndexedDB
+    const exists = await hasIdentityKeys(userId)
+    if (exists) return
+
+    // Generate new ECDH key pair
+    const keyPair = await generateIdentityKeyPair()
+
+    // Save private key to IndexedDB (never leaves browser)
+    await saveIdentityKeyPair(userId, keyPair.publicKey, keyPair.privateKey)
+
+    // Upload public key to server
+    await api.post('/api/encryption/keys/upload', {
+      identityPublicKey: publicKeyToBase64(keyPair.publicKey),
+    }, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+  } catch (e2eeError) {
+    console.warn('E2EE key setup failed (non-critical):', e2eeError)
+  }
+}
+
 const initialState = {
   user: null,
   accessToken: getStoredTokens().accessToken,
@@ -32,7 +60,9 @@ const initialState = {
   error: null,
   // 2FA state
   requiresTwoFactor: false,
-  tempToken: null
+  tempToken: null,
+  // Guest state
+  isGuest: false,
 }
 
 export const login = createAsyncThunk(
@@ -52,6 +82,8 @@ export const login = createAsyncThunk(
       if (data.success) {
         const { accessToken, refreshToken } = data.data.tokens
         saveTokens(accessToken, refreshToken)
+        // E2EE: Generate keys if not already set up
+        setupE2EEKeys(data.data.user.id, accessToken)
         return {
           user: data.data.user,
           accessToken,
@@ -73,6 +105,8 @@ export const loginWithTwoFactor = createAsyncThunk(
       if (data.success) {
         const { accessToken, refreshToken } = data.data.tokens
         saveTokens(accessToken, refreshToken)
+        // E2EE: Generate keys if not already set up
+        setupE2EEKeys(data.data.user.id, accessToken)
         return {
           user: data.data.user,
           accessToken,
@@ -88,17 +122,24 @@ export const loginWithTwoFactor = createAsyncThunk(
 
 export const register = createAsyncThunk(
   'auth/register',
-  async ({ name, username, email, password }, { rejectWithValue }) => {
+  async ({ name, username, email, password }, { getState, rejectWithValue }) => {
     try {
+      const { isGuest } = getState().auth
+      const guestUserId = isGuest ? localStorage.getItem(GUEST_USER_ID_KEY) : null
+
       const { data } = await api.post('/api/auth/register', {
         fullName: name,
         username,
         email,
-        password
+        password,
+        ...(guestUserId && { guestUserId }),
       })
       if (data.success) {
         const { accessToken, refreshToken } = data.data.tokens
         saveTokens(accessToken, refreshToken)
+        localStorage.removeItem(GUEST_USER_ID_KEY)
+        // E2EE: Generate keys for new user
+        setupE2EEKeys(data.data.user.id, accessToken)
         return {
           user: data.data.user,
           accessToken,
@@ -108,6 +149,33 @@ export const register = createAsyncThunk(
       return rejectWithValue(data.message || 'Registration failed')
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Registration failed')
+    }
+  }
+)
+
+export const guestLogin = createAsyncThunk(
+  'auth/guestLogin',
+  async (_, { rejectWithValue }) => {
+    try {
+      const storedGuestId = localStorage.getItem(GUEST_USER_ID_KEY)
+      const payload = storedGuestId ? { guestUserId: storedGuestId } : {}
+
+      const { data } = await api.post('/api/auth/guest', payload)
+
+      if (data.success) {
+        const { accessToken, refreshToken } = data.data.tokens
+        saveTokens(accessToken, refreshToken)
+        localStorage.setItem(GUEST_USER_ID_KEY, data.data.user.id)
+        return {
+          user: data.data.user,
+          accessToken,
+          refreshToken,
+        }
+      }
+      return rejectWithValue(data.message || 'Guest login failed')
+    } catch (error) {
+      const msg = error.response?.data?.message || 'Guest login failed'
+      return rejectWithValue(msg)
     }
   }
 )
@@ -162,6 +230,7 @@ const authSlice = createSlice({
       state.error = null
       state.requiresTwoFactor = false
       state.tempToken = null
+      state.isGuest = false
     },
     clearError: (state) => {
       state.error = null
@@ -234,11 +303,32 @@ const authSlice = createSlice({
         state.accessToken = action.payload.accessToken
         state.refreshToken = action.payload.refreshToken
         state.isAuthenticated = true
+        state.isGuest = false
         toast.success('Registration successful!')
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false
         state.error = action.payload
+        toast.error(action.payload)
+      })
+      // Guest Login
+      .addCase(guestLogin.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(guestLogin.fulfilled, (state, action) => {
+        state.isLoading = false
+        state.user = action.payload.user
+        state.accessToken = action.payload.accessToken
+        state.refreshToken = action.payload.refreshToken
+        state.isAuthenticated = true
+        state.isGuest = true
+        toast.success('Welcome, guest!')
+      })
+      .addCase(guestLogin.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.payload
+        localStorage.removeItem(GUEST_USER_ID_KEY)
         toast.error(action.payload)
       })
       // Refresh token

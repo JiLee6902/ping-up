@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { assets } from '../assets/assets'
-import { Star, Eye, EyeOff, Loader2, Shield, ArrowLeft } from 'lucide-react'
+import { Star, Eye, EyeOff, Loader2, Shield, ArrowLeft, UserRound } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
-import { login, loginWithTwoFactor, clear2FA } from '../features/auth/authSlice'
+import { login, loginWithTwoFactor, clear2FA, guestLogin } from '../features/auth/authSlice'
 import { Link, useNavigate } from 'react-router-dom'
 
 const Login = () => {
@@ -10,6 +10,7 @@ const Login = () => {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [twoFactorCode, setTwoFactorCode] = useState('')
+  const [guestLoading, setGuestLoading] = useState(false)
 
   const dispatch = useDispatch()
   const navigate = useNavigate()
@@ -33,6 +34,15 @@ const Login = () => {
     e.preventDefault()
     const result = await dispatch(loginWithTwoFactor({ tempToken, code: twoFactorCode }))
     if (loginWithTwoFactor.fulfilled.match(result)) {
+      navigate('/')
+    }
+  }
+
+  const handleGuestLogin = async () => {
+    setGuestLoading(true)
+    const result = await dispatch(guestLogin())
+    setGuestLoading(false)
+    if (guestLogin.fulfilled.match(result)) {
       navigate('/')
     }
   }
@@ -123,6 +133,33 @@ const Login = () => {
                   )}
                 </button>
               </form>
+
+              {/* Divider */}
+              <div className='flex items-center gap-3 my-4'>
+                <div className='flex-1 h-px bg-gray-300'></div>
+                <span className='text-sm text-gray-500'>or</span>
+                <div className='flex-1 h-px bg-gray-300'></div>
+              </div>
+
+              {/* Guest Login Button */}
+              <button
+                type='button'
+                onClick={handleGuestLogin}
+                disabled={isLoading || guestLoading}
+                className='w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border border-gray-300'
+              >
+                {guestLoading ? (
+                  <>
+                    <Loader2 className='animate-spin' size={20} />
+                    Entering as guest...
+                  </>
+                ) : (
+                  <>
+                    <UserRound size={20} />
+                    Continue as Guest
+                  </>
+                )}
+              </button>
 
               <p className='text-center mt-6 text-gray-600'>
                 Don't have an account?{' '}

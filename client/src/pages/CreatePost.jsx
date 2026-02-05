@@ -29,6 +29,7 @@ const CreatePost = () => {
   const videoInputRef = useRef(null)
 
   const user = useSelector((state) => state.user.value)
+  const isPremium = user?.subscriptionTier === 'premium' || user?.subscription_tier === 'premium'
 
   const handleEmojiSelect = (emoji) => {
     setContent((prev) => prev + emoji)
@@ -473,18 +474,22 @@ const CreatePost = () => {
                 )}
               </button>
 
-              {/* Poll Button */}
+              {/* Poll Button (Premium only) */}
               <button
                 type='button'
                 onClick={() => {
+                  if (!isPremium) {
+                    toast.error('Polls are a Premium feature. Upgrade to create polls.')
+                    return
+                  }
                   if (images.length > 0 || video) {
                     toast.error('Cannot add poll with images or video')
                     return
                   }
                   setShowPoll(!showPoll)
                 }}
-                className={`text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition ${showPoll ? 'text-blue-500' : ''} ${(images.length > 0 || video) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                title='Create poll'
+                className={`text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition ${showPoll ? 'text-blue-500' : ''} ${(!isPremium || images.length > 0 || video) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={isPremium ? 'Create poll' : 'Premium feature'}
               >
                 <BarChart2 className='size-6' />
               </button>
