@@ -59,10 +59,10 @@ const Wallet = () => {
 
   const getTransactionLabel = (type) => {
     switch (type) {
-      case 'top_up': return 'Nap tien'
-      case 'purchase': return 'Mua hang'
-      case 'refund': return 'Hoan tien'
-      case 'bonus': return 'Thuong'
+      case 'top_up': return 'Top Up'
+      case 'purchase': return 'Purchase'
+      case 'refund': return 'Refund'
+      case 'bonus': return 'Bonus'
       default: return type
     }
   }
@@ -71,7 +71,7 @@ const Wallet = () => {
     <div className='h-full overflow-y-auto bg-slate-50 dark:bg-gray-900'>
       <div className='max-w-2xl mx-auto p-4'>
         {/* Header */}
-        <h1 className='text-2xl font-bold text-gray-900 dark:text-white mb-6'>Vi cua toi</h1>
+        <h1 className='text-2xl font-bold text-gray-900 dark:text-white mb-6'>My Wallet</h1>
 
         {loading ? (
           <div className='flex justify-center py-12'>
@@ -80,16 +80,16 @@ const Wallet = () => {
         ) : (
           <>
             {/* Balance Card */}
-            <div className='bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-6 text-white mb-6'>
+            <div className='bg-gray-900 dark:bg-gray-800 rounded-2xl p-6 text-white mb-6'>
               <div className='flex items-center justify-between mb-4'>
-                <span className='text-sm opacity-80'>So du hien tai</span>
+                <span className='text-sm opacity-80'>Current balance</span>
                 <WalletIcon className='w-6 h-6 opacity-80' />
               </div>
               <div className='text-4xl font-bold mb-2'>
                 {wallet?.balance?.toLocaleString() || 0} <span className='text-xl'>coins</span>
               </div>
               <div className='text-sm opacity-80'>
-                Tong nap: {wallet?.totalTopUp?.toLocaleString() || 0} | Da chi: {wallet?.totalSpent?.toLocaleString() || 0}
+                Total top-up: {wallet?.totalTopUp?.toLocaleString() || 0} | Spent: {wallet?.totalSpent?.toLocaleString() || 0}
               </div>
             </div>
 
@@ -100,7 +100,7 @@ const Wallet = () => {
                 className='flex items-center justify-center gap-2 bg-white dark:bg-gray-800 rounded-xl p-4 shadow hover:shadow-md transition-shadow'
               >
                 <Plus className='w-5 h-5 text-green-500' />
-                <span className='font-medium text-gray-900 dark:text-white'>Nap tien</span>
+                <span className='font-medium text-gray-900 dark:text-white'>Top Up</span>
               </button>
               <button
                 onClick={() => navigate('/subscription')}
@@ -114,12 +114,12 @@ const Wallet = () => {
             {/* Transaction History */}
             <div className='bg-white dark:bg-gray-800 rounded-xl shadow'>
               <div className='p-4 border-b border-gray-200 dark:border-gray-700'>
-                <h2 className='font-semibold text-gray-900 dark:text-white'>Lich su giao dich</h2>
+                <h2 className='font-semibold text-gray-900 dark:text-white'>Transaction History</h2>
               </div>
               {transactions.length === 0 ? (
                 <div className='p-8 text-center'>
                   <CreditCard className='w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3' />
-                  <p className='text-gray-500 dark:text-gray-400'>Chua co giao dich nao</p>
+                  <p className='text-gray-500 dark:text-gray-400'>No transactions yet</p>
                 </div>
               ) : (
                 <div className='divide-y divide-gray-200 dark:divide-gray-700'>

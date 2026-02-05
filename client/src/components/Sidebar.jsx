@@ -11,6 +11,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen, isAuthenticated = true }) => {
   const navigate = useNavigate()
   const dispatch = useDispatch()
   const user = useSelector((state) => state.user.value)
+  const { isGuest } = useSelector((state) => state.auth)
 
   const handleSignOut = () => {
     dispatch(logout())
@@ -25,6 +26,20 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen, isAuthenticated = true }) => {
 
         {isAuthenticated ? (
           <>
+            {isGuest && (
+              <div className='mx-4 mb-4 p-3 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg'>
+                <p className='text-xs text-gray-600 dark:text-gray-400 mb-2'>
+                  You're browsing as a guest. Register to unlock all features.
+                </p>
+                <Link
+                  to='/register'
+                  className='flex items-center justify-center gap-1 py-1.5 text-sm rounded-md bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 text-white transition'
+                >
+                  <UserPlus className='w-4 h-4' />
+                  Create Account
+                </Link>
+              </div>
+            )}
             <MenuItems setSidebarOpen={setSidebarOpen} />
 
             <Link to='/create-post' className='flex items-center justify-center gap-2 py-2.5 mt-6 mx-6 rounded-lg bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 active:scale-95 transition text-white cursor-pointer'>

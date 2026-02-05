@@ -3,7 +3,7 @@ import { ImageIcon, SendHorizonal, Settings, Phone, Video, Smile } from 'lucide-
 import { useDispatch, useSelector } from 'react-redux'
 import { useParams } from 'react-router-dom'
 import api from '../api/axios'
-import { addMessage, fetchMessages, resetMessages, markMessagesSeen } from '../features/messages/messagesSlice'
+import { addMessage, fetchMessages, resetMessages, markMessagesSeen, deleteMessage as deleteMessageAction, unsendMessage as unsendMessageAction } from '../features/messages/messagesSlice'
 import toast from 'react-hot-toast'
 import ChatSettingsModal from '../components/ChatSettingsModal'
 import VideoCall from '../components/VideoCall'
@@ -13,12 +13,13 @@ import TextToSpeech from '../components/TextToSpeech'
 import { useSocket } from '../context/SocketContext'
 import EmojiPicker from '../components/EmojiPicker'
 import Loading from '../components/Loading'
+import { useE2EE } from '../hooks/useE2EE'
 
 const ChatBox = () => {
   const { messages } = useSelector((state) => state.messages)
   const { userId } = useParams()
   const dispatch = useDispatch()
-  const { accessToken } = useSelector((state) => state.auth)
+  const { accessToken, isGuest } = useSelector((state) => state.auth)
   const currentUser = useSelector((state) => state.user.value)
 
   const [text, setText] = useState('')
@@ -32,11 +33,17 @@ const ChatBox = () => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [loadingUser, setLoadingUser] = useState(true)
   const [isRecording, setIsRecording] = useState(false)
+  const [guestLimitReached, setGuestLimitReached] = useState(false)
+  const [decryptedMessages, setDecryptedMessages] = useState([])
+  const [contextMenu, setContextMenu] = useState(null) // { messageId, x, y, isSent }
   const messagesEndRef = useRef(null)
 
   const { socket, isUserOnline, fetchOnlineStatus, isUserTyping, emitTyping, emitStopTyping } = useSocket()
   const typingTimeoutRef = useRef(null)
   const connections = useSelector((state) => state.connections.connections)
+
+  // E2EE: encrypt/decrypt for this conversation
+  const { encrypt, decrypt, isReady: e2eeReady, e2eeEnabled } = useE2EE(currentUser?.id, userId)
 
   // Listen for socket events specific to this chat
   useEffect(() => {
@@ -45,7 +52,17 @@ const ChatBox = () => {
     const handleNewMessage = async (data) => {
       const message = data.message
       if (message.fromUser?.id === userId) {
-        dispatch(addMessage(message))
+        // E2EE: Decrypt incoming message if encrypted
+        let displayMessage = message
+        if (message.encrypted && message.encryptionIv && e2eeEnabled) {
+          try {
+            const plaintext = await decrypt(message)
+            displayMessage = { ...message, text: plaintext, _localDecrypted: true }
+          } catch (err) {
+            displayMessage = { ...message, text: '[Encrypted message]', _localDecrypted: true }
+          }
+        }
+        dispatch(addMessage(displayMessage))
         // Mark message as seen immediately since we're in the chat
         try {
           await api.post('/api/message/mark-seen', { fromUserId: userId })
@@ -85,11 +102,16 @@ const ChatBox = () => {
       })
     }
 
+    const handleMessageUnsent = (data) => {
+      dispatch(unsendMessageAction({ messageId: data.messageId, unsentAt: data.unsentAt }))
+    }
+
     socket.on('newMessage', handleNewMessage)
     socket.on('messageSeen', handleMessageSeen)
     socket.on('chatSettingsUpdated', handleChatSettingsUpdated)
     socket.on('chatEventCreated', handleChatEventCreated)
     socket.on('callOffer', handleCallOffer)
+    socket.on('messageUnsent', handleMessageUnsent)
 
     return () => {
       socket.off('newMessage', handleNewMessage)
@@ -97,8 +119,9 @@ const ChatBox = () => {
       socket.off('chatSettingsUpdated', handleChatSettingsUpdated)
       socket.off('chatEventCreated', handleChatEventCreated)
       socket.off('callOffer', handleCallOffer)
+      socket.off('messageUnsent', handleMessageUnsent)
     }
-  }, [socket, userId, dispatch])
+  }, [socket, userId, dispatch, e2eeEnabled, decrypt])
 
   const fetchUserMessages = async () => {
     try {
@@ -143,10 +166,26 @@ const ChatBox = () => {
     setShowSettings(false)
   }
 
+  const GUEST_BOT_MESSAGE_LIMIT = 3
+
+  const isGuestMessageLimitReached = () => {
+    if (!isGuest || !user?.isBot) return false
+    if (guestLimitReached) return true
+    const sentMessages = decryptedMessages.filter(
+      (m) => (m.fromUser?.id || m.fromUserId) === currentUser?.id
+    )
+    return sentMessages.length >= GUEST_BOT_MESSAGE_LIMIT
+  }
+
   const sendMessage = async () => {
     try {
       if (!text && !image) return
       if (isSending) return
+
+      if (isGuestMessageLimitReached()) {
+        toast.error('Guest message limit reached. Please register to continue chatting.')
+        return
+      }
 
       setIsSending(true)
 
@@ -156,21 +195,44 @@ const ChatBox = () => {
       }
       emitStopTyping(userId)
 
+      // E2EE: Encrypt text before sending
+      let messageText = text
+      let isEncrypted = false
+      let encryptionIv = null
+      if (text && e2eeEnabled) {
+        const encrypted = await encrypt(text)
+        messageText = encrypted.text
+        isEncrypted = encrypted.encrypted
+        encryptionIv = encrypted.iv
+      }
+
       const formData = new FormData()
       formData.append('toUserId', userId)
-      formData.append('text', text)
+      formData.append('text', messageText)
       if (image) formData.append('image', image)
+      if (isEncrypted) {
+        formData.append('encrypted', 'true')
+        formData.append('iv', encryptionIv)
+      }
 
       const { data } = await api.post('/api/message/send', formData)
       if (data.success) {
+        // Show original plaintext locally (avoid re-decrypting own messages)
+        const displayMessage = isEncrypted
+          ? { ...data.data, text, _localDecrypted: true }
+          : data.data
         setText('')
         setImage(null)
-        dispatch(addMessage(data.data))
+        dispatch(addMessage(displayMessage))
       } else {
         throw new Error(data.message)
       }
     } catch (error) {
-      toast.error(error.message)
+      const msg = error.response?.data?.message || error.message
+      if (error.response?.status === 403 && isGuest) {
+        setGuestLimitReached(true)
+      }
+      toast.error(msg)
     } finally {
       setIsSending(false)
     }
@@ -179,6 +241,11 @@ const ChatBox = () => {
   const sendVoiceMessage = async (audioBlob) => {
     try {
       if (isSending) return
+
+      if (isGuestMessageLimitReached()) {
+        toast.error('Guest message limit reached. Please register to continue chatting.')
+        return
+      }
       setIsSending(true)
       setIsRecording(false)
 
@@ -193,7 +260,11 @@ const ChatBox = () => {
         throw new Error(data.message)
       }
     } catch (error) {
-      toast.error(error.message)
+      const msg = error.response?.data?.message || error.message
+      if (error.response?.status === 403 && isGuest) {
+        setGuestLimitReached(true)
+      }
+      toast.error(msg)
     } finally {
       setIsSending(false)
     }
@@ -247,9 +318,35 @@ const ChatBox = () => {
     }
   }, [connections, userId])
 
+  // E2EE: Decrypt fetched message history
+  useEffect(() => {
+    if (!e2eeReady || messages.length === 0) {
+      setDecryptedMessages(messages)
+      return
+    }
+
+    let cancelled = false
+    async function decryptAll() {
+      const results = await Promise.all(
+        messages.map(async (msg) => {
+          if (msg._localDecrypted || !msg.encrypted || !msg.encryptionIv) return msg
+          try {
+            const plaintext = await decrypt(msg)
+            return { ...msg, text: plaintext, _localDecrypted: true }
+          } catch {
+            return { ...msg, text: '[Encrypted message]', _localDecrypted: true }
+          }
+        })
+      )
+      if (!cancelled) setDecryptedMessages(results)
+    }
+    decryptAll()
+    return () => { cancelled = true }
+  }, [messages, e2eeReady, decrypt])
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  }, [decryptedMessages])
 
   const profilePicture = user?.profilePicture || user?.profile_picture
   const fullName = user?.fullName || user?.full_name
@@ -287,6 +384,54 @@ const ChatBox = () => {
     }
   }, [userId, emitStopTyping])
 
+  // Context menu handlers
+  const handleMessageContextMenu = (e, message, isSent) => {
+    e.preventDefault()
+    if (message.isUnsent) return // Don't show menu for unsent messages
+    setContextMenu({
+      messageId: message.id,
+      x: e.clientX || e.touches?.[0]?.clientX || 0,
+      y: e.clientY || e.touches?.[0]?.clientY || 0,
+      isSent,
+      message,
+    })
+  }
+
+  const handleDeleteForMe = async () => {
+    if (!contextMenu) return
+    try {
+      const { data } = await api.post('/api/message/delete', { messageId: contextMenu.messageId })
+      if (data.success) {
+        dispatch(deleteMessageAction({ messageId: contextMenu.messageId }))
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to delete message')
+    }
+    setContextMenu(null)
+  }
+
+  const handleUnsend = async () => {
+    if (!contextMenu) return
+    try {
+      const { data } = await api.post('/api/message/unsend', { messageId: contextMenu.messageId })
+      if (data.success) {
+        dispatch(unsendMessageAction({ messageId: contextMenu.messageId, unsentAt: data.data?.unsentAt }))
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to unsend message')
+    }
+    setContextMenu(null)
+  }
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null)
+    if (contextMenu) {
+      document.addEventListener('click', handleClick)
+      return () => document.removeEventListener('click', handleClick)
+    }
+  }, [contextMenu])
+
   // Helper to normalize date string with timezone
   const normalizeDate = (dateString) => {
     if (!dateString) return new Date()
@@ -303,7 +448,7 @@ const ChatBox = () => {
   }
 
   // Sort messages and check if last message is sent by current user and seen
-  const sortedMessages = messages.toSorted((a, b) => normalizeDate(a.createdAt) - normalizeDate(b.createdAt))
+  const sortedMessages = decryptedMessages.toSorted((a, b) => normalizeDate(a.createdAt) - normalizeDate(b.createdAt))
   const lastMessage = sortedMessages[sortedMessages.length - 1]
   const lastMessageToUserId = lastMessage?.toUser?.id || lastMessage?.toUserId || lastMessage?.to_user_id
   const isLastMessageSentByMe = lastMessageToUserId === chatUserId
@@ -365,7 +510,16 @@ const ChatBox = () => {
             <span className={`absolute bottom-0 right-0 size-3 rounded-full border-2 border-white ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
           </div>
           <div>
-            <p className="font-semibold text-gray-900 text-[15px]">{displayName}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="font-semibold text-gray-900 text-[15px]">{displayName}</p>
+              {e2eeEnabled && (
+                <span className="text-[10px] text-green-600 flex items-center gap-0.5" title="End-to-end encrypted">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </span>
+              )}
+            </div>
             {isTyping ? (
               <p className="text-xs text-blue-500 font-medium flex items-center gap-1">
                 <span className="flex gap-0.5">
@@ -424,8 +578,32 @@ const ChatBox = () => {
               const nextIsSent = nextToUserId === chatUserId
               const isLastInGroup = !nextItem || !nextIsMessage || nextIsSent !== isSent
 
+              // Unsent message UI
+              if (message.isUnsent) {
+                return (
+                  <div key={message.id || index} className={`flex items-end gap-1 ${isSent ? 'justify-end' : 'justify-start'}`}>
+                    {!isSent && (
+                      <div className='w-5 shrink-0'>
+                        {isLastInGroup && <img src={profilePicture} alt="" className='size-5 rounded-full object-cover' />}
+                      </div>
+                    )}
+                    <div className={`max-w-[75%] ${isSent ? 'text-right' : ''}`}>
+                      <div className={`inline-block px-3 py-1 text-[14px] rounded-2xl border border-gray-200 bg-white/50`}>
+                        <p className='italic text-gray-400 text-[13px]'>
+                          {isSent ? 'You unsent a message' : 'Message unsent'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
+
               return (
-                <div key={message.id || index} className={`flex items-end gap-1 ${isSent ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  key={message.id || index}
+                  className={`flex items-end gap-1 ${isSent ? 'justify-end' : 'justify-start'}`}
+                  onContextMenu={(e) => handleMessageContextMenu(e, message, isSent)}
+                >
                   {!isSent && (
                     <div className='w-5 shrink-0'>
                       {isLastInGroup && <img src={profilePicture} alt="" className='size-5 rounded-full object-cover' />}
@@ -477,73 +655,119 @@ const ChatBox = () => {
         </div>
       </div>
 
-      {/* Input */}
-      <div className='px-3 py-2 bg-white/95 backdrop-blur-sm border-t border-gray-200'>
-        <div className='max-w-2xl mx-auto flex items-center gap-2'>
-          {isRecording ? (
-            <VoiceRecorder
-              onSend={sendVoiceMessage}
-              onCancel={() => setIsRecording(false)}
-            />
-          ) : (
-            <>
-              <label htmlFor="image" className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition shrink-0'>
-                {image
-                  ? <img src={URL.createObjectURL(image)} alt="" className='h-5 w-5 rounded object-cover' />
-                  : <ImageIcon className='w-5 h-5' style={{ color: msgColor }} />
-                }
-                <input type="file" id='image' accept="image/*" hidden onChange={(e) => setImage(e.target.files[0])} />
-              </label>
-              {/* Emoji Button */}
-              <div className='relative'>
-                <button
-                  type='button'
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition shrink-0'
-                  style={{ color: msgColor }}
-                >
-                  <Smile className='w-5 h-5' />
-                </button>
-                {showEmojiPicker && (
-                  <EmojiPicker
-                    onEmojiSelect={(emoji) => setText((prev) => prev + emoji)}
-                    onClose={() => setShowEmojiPicker(false)}
-                  />
-                )}
-              </div>
-              <div className='flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2'>
-                <input
-                  type="text"
-                  className='flex-1 bg-transparent outline-none text-[14px] text-gray-900 placeholder-gray-500'
-                  placeholder='Aa'
-                  onKeyDown={e => e.key === 'Enter' && sendMessage()}
-                  onChange={handleTextChange}
-                  value={text}
-                />
-              </div>
-              {/* Show mic button when no text/image, send button otherwise */}
-              {!text && !image ? (
-                <button
-                  onClick={() => setIsRecording(true)}
-                  className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition shrink-0'
-                  style={{ color: msgColor }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-                </button>
-              ) : (
-                <button
-                  onClick={sendMessage}
-                  disabled={isSending || (!text && !image)}
-                  className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0'
-                  style={{ color: msgColor }}
-                >
-                  <SendHorizonal className='w-5 h-5' />
-                </button>
-              )}
-            </>
+      {/* Message Context Menu */}
+      {contextMenu && (
+        <div
+          className='fixed z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 min-w-[160px]'
+          style={{
+            left: Math.min(contextMenu.x, window.innerWidth - 180),
+            top: Math.min(contextMenu.y, window.innerHeight - 120),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={handleDeleteForMe}
+            className='w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition'
+          >
+            Delete for me
+          </button>
+          {contextMenu.isSent && (
+            <button
+              onClick={handleUnsend}
+              className='w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition'
+            >
+              Unsend
+            </button>
           )}
         </div>
-      </div>
+      )}
+
+      {/* Input or Guest limit banner */}
+      {isGuest && user?.isBot && isGuestMessageLimitReached() ? (
+        <div className='px-4 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700'>
+          <div className='max-w-2xl mx-auto text-center'>
+            <p className='text-base font-semibold text-gray-800 dark:text-gray-200 mb-1'>
+              Guest message limit reached
+            </p>
+            <p className='text-sm text-gray-500 dark:text-gray-400 mb-3'>
+              Register a free account to continue chatting without limits.
+            </p>
+            <a
+              href='/register'
+              className='inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 text-white font-semibold rounded-lg transition'
+            >
+              Register now
+            </a>
+          </div>
+        </div>
+      ) : (
+        <div className='px-3 py-2 bg-white/95 backdrop-blur-sm border-t border-gray-200'>
+          <div className='max-w-2xl mx-auto flex items-center gap-2'>
+            {isRecording ? (
+              <VoiceRecorder
+                onSend={sendVoiceMessage}
+                onCancel={() => setIsRecording(false)}
+              />
+            ) : (
+              <>
+                <label htmlFor="image" className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition shrink-0'>
+                  {image
+                    ? <img src={URL.createObjectURL(image)} alt="" className='h-5 w-5 rounded object-cover' />
+                    : <ImageIcon className='w-5 h-5' style={{ color: msgColor }} />
+                  }
+                  <input type="file" id='image' accept="image/*" hidden onChange={(e) => setImage(e.target.files[0])} />
+                </label>
+                {/* Emoji Button */}
+                <div className='relative'>
+                  <button
+                    type='button'
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition shrink-0'
+                    style={{ color: msgColor }}
+                  >
+                    <Smile className='w-5 h-5' />
+                  </button>
+                  {showEmojiPicker && (
+                    <EmojiPicker
+                      onEmojiSelect={(emoji) => setText((prev) => prev + emoji)}
+                      onClose={() => setShowEmojiPicker(false)}
+                    />
+                  )}
+                </div>
+                <div className='flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2'>
+                  <input
+                    type="text"
+                    className='flex-1 bg-transparent outline-none text-[14px] text-gray-900 placeholder-gray-500'
+                    placeholder='Aa'
+                    onKeyDown={e => e.key === 'Enter' && sendMessage()}
+                    onChange={handleTextChange}
+                    value={text}
+                  />
+                </div>
+                {/* Show mic button when no text/image, send button otherwise */}
+                {!text && !image ? (
+                  <button
+                    onClick={() => setIsRecording(true)}
+                    className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition shrink-0'
+                    style={{ color: msgColor }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                  </button>
+                ) : (
+                  <button
+                    onClick={sendMessage}
+                    disabled={isSending || (!text && !image)}
+                    className='p-2 hover:bg-gray-100 rounded-full cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0'
+                    style={{ color: msgColor }}
+                  >
+                    <SendHorizonal className='w-5 h-5' />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {showSettings && (

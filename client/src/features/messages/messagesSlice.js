@@ -40,6 +40,19 @@ const messagesSlice = createSlice({
                 return m
             })
         },
+        deleteMessage: (state, action) => {
+            const { messageId } = action.payload
+            state.messages = state.messages.filter(m => m.id !== messageId)
+        },
+        unsendMessage: (state, action) => {
+            const { messageId, unsentAt } = action.payload
+            state.messages = state.messages.map(m => {
+                if (m.id === messageId) {
+                    return { ...m, isUnsent: true, unsentAt, text: null, mediaUrl: null, transcription: null }
+                }
+                return m
+            })
+        },
     },
     extraReducers: (builder)=>{
         builder.addCase(fetchMessages.fulfilled, (state, action)=>{
@@ -50,6 +63,6 @@ const messagesSlice = createSlice({
     }
 })
 
-export const {setMessages, addMessage, resetMessages, markMessagesSeen} = messagesSlice.actions;
+export const {setMessages, addMessage, resetMessages, markMessagesSeen, deleteMessage, unsendMessage} = messagesSlice.actions;
 
 export default messagesSlice.reducer

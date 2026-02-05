@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { assets } from '../assets/assets'
 import { Star, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
@@ -18,7 +18,17 @@ const Register = () => {
 
   const dispatch = useDispatch()
   const navigate = useNavigate()
-  const { isLoading } = useSelector((state) => state.auth)
+  const { isLoading, isGuest, user: guestUser } = useSelector((state) => state.auth)
+
+  useEffect(() => {
+    if (isGuest && guestUser) {
+      setFormData((prev) => ({
+        ...prev,
+        name: guestUser.fullName || '',
+        username: guestUser.username || '',
+      }))
+    }
+  }, [isGuest, guestUser])
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -79,6 +89,14 @@ const Register = () => {
         <div className='w-full max-w-md bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-8'>
           <h2 className='text-2xl font-bold text-gray-800 mb-2'>Create account</h2>
           <p className='text-gray-600 mb-6'>Join the community today</p>
+
+          {isGuest && (
+            <div className='mb-4 p-3 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg'>
+              <p className='text-sm text-gray-700 dark:text-gray-300'>
+                Converting your guest account. Your data will be preserved.
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className='space-y-4'>
             <div>

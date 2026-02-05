@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Crown, Check, Star, Sparkles, Calendar, Shield } from 'lucide-react'
+import { Crown, Check, Star, Sparkles, Calendar, Shield, ChevronDown } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
@@ -11,6 +11,7 @@ const Subscription = () => {
   const [balance, setBalance] = useState(0)
   const [loading, setLoading] = useState(true)
   const [purchasing, setPurchasing] = useState(false)
+  const [expandedPlan, setExpandedPlan] = useState(null)
 
   const fetchData = async () => {
     try {
@@ -37,7 +38,7 @@ const Subscription = () => {
   const handlePurchase = async (plan) => {
     const price = plans[plan]?.price || 0
     if (balance < price) {
-      toast.error(`So du khong du. Can ${price} coins, hien co ${balance} coins`)
+      toast.error(`Insufficient balance. Need ${price} coins, you have ${balance} coins`)
       navigate('/topup')
       return
     }
@@ -46,7 +47,7 @@ const Subscription = () => {
     try {
       const { data } = await api.post('/api/subscription/purchase', { plan })
       if (data?.subscription) {
-        toast.success('Nang cap Premium thanh cong!')
+        toast.success('Premium upgrade successful!')
         setStatus(data)
         fetchData()
       }
@@ -58,16 +59,16 @@ const Subscription = () => {
   }
 
   const premiumFeatures = [
-    { icon: <Shield className='w-5 h-5' />, text: 'Huy hieu xac minh' },
-    { icon: <Sparkles className='w-5 h-5' />, text: 'Khong quang cao' },
-    { icon: <Star className='w-5 h-5' />, text: 'Dang bai khong gioi han' },
-    { icon: <Check className='w-5 h-5' />, text: 'Upload video' },
-    { icon: <Check className='w-5 h-5' />, text: 'Xem ai da xem profile' },
-    { icon: <Check className='w-5 h-5' />, text: 'Ghim bai viet' },
-    { icon: <Check className='w-5 h-5' />, text: 'Len lich dang bai' },
-    { icon: <Check className='w-5 h-5' />, text: '4 lua chon poll (thay vi 2)' },
-    { icon: <Check className='w-5 h-5' />, text: 'Story khong gioi han' },
-    { icon: <Check className='w-5 h-5' />, text: 'Nhom chat khong gioi han' },
+    { icon: <Shield className='w-5 h-5' />, text: 'Verified badge' },
+    { icon: <Sparkles className='w-5 h-5' />, text: 'Ad-free experience' },
+    { icon: <Star className='w-5 h-5' />, text: 'Unlimited posts' },
+    { icon: <Check className='w-5 h-5' />, text: 'Video uploads' },
+    { icon: <Check className='w-5 h-5' />, text: 'See who viewed your profile' },
+    { icon: <Check className='w-5 h-5' />, text: 'Pin posts' },
+    { icon: <Check className='w-5 h-5' />, text: 'Schedule posts' },
+    { icon: <Check className='w-5 h-5' />, text: 'Create polls in posts' },
+    { icon: <Check className='w-5 h-5' />, text: 'Unlimited stories' },
+    { icon: <Check className='w-5 h-5' />, text: 'Unlimited group chats' },
   ]
 
   return (
@@ -87,14 +88,14 @@ const Subscription = () => {
                   <div>
                     <h2 className='text-xl font-bold'>Premium Active</h2>
                     <p className='text-yellow-100'>
-                      Con {status.daysRemaining} ngay
+                      {status.daysRemaining} days remaining
                     </p>
                   </div>
                 </div>
                 <div className='flex items-center gap-2 text-sm text-yellow-100'>
                   <Calendar className='w-4 h-4' />
                   <span>
-                    Het han: {new Date(status.subscription.premiumExpiresAt).toLocaleDateString('vi-VN')}
+                    Expires: {new Date(status.subscription.premiumExpiresAt).toLocaleDateString('en-US')}
                   </span>
                 </div>
               </div>
@@ -107,81 +108,102 @@ const Subscription = () => {
                 PingUp Premium
               </h1>
               <p className='text-gray-500 dark:text-gray-400'>
-                Mo khoa tat ca tinh nang cao cap
+                Unlock all premium features
               </p>
-            </div>
-
-            {/* Features List */}
-            <div className='bg-white dark:bg-gray-800 rounded-xl shadow mb-6'>
-              <div className='p-4 border-b border-gray-200 dark:border-gray-700'>
-                <h3 className='font-semibold text-gray-900 dark:text-white'>Quyen loi Premium</h3>
-              </div>
-              <div className='p-4 space-y-3'>
-                {premiumFeatures.map((feature, index) => (
-                  <div key={index} className='flex items-center gap-3'>
-                    <div className='text-yellow-500'>{feature.icon}</div>
-                    <span className='text-gray-700 dark:text-gray-300'>{feature.text}</span>
-                  </div>
-                ))}
-              </div>
             </div>
 
             {/* Plans */}
             {plans && (
               <div className='space-y-4 mb-6'>
                 {/* Monthly */}
-                <div className='bg-white dark:bg-gray-800 rounded-xl shadow p-4'>
-                  <div className='flex items-center justify-between'>
-                    <div>
-                      <h3 className='text-lg font-semibold text-gray-900 dark:text-white'>
-                        Premium Hang Thang
-                      </h3>
-                      <p className='text-gray-500 dark:text-gray-400 text-sm'>
-                        {plans.monthly.days} ngay
-                      </p>
-                    </div>
-                    <div className='text-right'>
-                      <p className='text-2xl font-bold text-gray-900 dark:text-white'>
-                        {plans.monthly.price} <span className='text-sm'>coins</span>
-                      </p>
+                <div className='bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden'>
+                  <div
+                    className='p-4 cursor-pointer'
+                    onClick={() => setExpandedPlan(expandedPlan === 'monthly' ? null : 'monthly')}
+                  >
+                    <div className='flex items-center justify-between'>
+                      <div>
+                        <h3 className='text-lg font-semibold text-gray-900 dark:text-white'>
+                          Monthly Premium
+                        </h3>
+                        <p className='text-gray-500 dark:text-gray-400 text-sm'>
+                          {plans.monthly.days} days
+                        </p>
+                      </div>
+                      <div className='flex items-center gap-3'>
+                        <p className='text-2xl font-bold text-gray-900 dark:text-white'>
+                          {plans.monthly.price} <span className='text-sm'>coins</span>
+                        </p>
+                        <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedPlan === 'monthly' ? 'rotate-180' : ''}`} />
+                      </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handlePurchase('monthly')}
-                    disabled={purchasing}
-                    className='w-full mt-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl disabled:opacity-50 transition-colors'
-                  >
-                    {purchasing ? 'Dang xu ly...' : 'Mua ngay'}
-                  </button>
+                  {expandedPlan === 'monthly' && (
+                    <div className='px-4 pb-4'>
+                      <div className='border-t border-gray-200 dark:border-gray-700 pt-3 mb-3 space-y-2'>
+                        {premiumFeatures.map((feature, index) => (
+                          <div key={index} className='flex items-center gap-2'>
+                            <div className='text-yellow-500'>{feature.icon}</div>
+                            <span className='text-sm text-gray-700 dark:text-gray-300'>{feature.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => handlePurchase('monthly')}
+                        disabled={purchasing}
+                        className='w-full py-3 bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 text-white font-semibold rounded-xl disabled:opacity-50 transition-colors'
+                      >
+                        {purchasing ? 'Processing...' : 'Buy Now'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Yearly */}
-                <div className='bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow p-4 relative overflow-hidden'>
-                  <div className='absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full'>
-                    Tiet kiem 17%
+                <div className='bg-gray-900 dark:bg-gray-700 rounded-xl shadow overflow-hidden relative'>
+                  <div className='absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full z-10'>
+                    Save 17%
                   </div>
-                  <div className='flex items-center justify-between text-white'>
-                    <div>
-                      <h3 className='text-lg font-semibold'>
-                        Premium Hang Nam
-                      </h3>
-                      <p className='text-indigo-200 text-sm'>
-                        {plans.yearly.days} ngay
-                      </p>
-                    </div>
-                    <div className='text-right'>
-                      <p className='text-2xl font-bold'>
-                        {plans.yearly.price} <span className='text-sm'>coins</span>
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handlePurchase('yearly')}
-                    disabled={purchasing}
-                    className='w-full mt-4 py-3 bg-white text-indigo-600 font-semibold rounded-xl disabled:opacity-50 hover:bg-gray-100 transition-colors'
+                  <div
+                    className='p-4 cursor-pointer'
+                    onClick={() => setExpandedPlan(expandedPlan === 'yearly' ? null : 'yearly')}
                   >
-                    {purchasing ? 'Dang xu ly...' : 'Mua ngay'}
-                  </button>
+                    <div className='flex items-center justify-between text-white'>
+                      <div>
+                        <h3 className='text-lg font-semibold'>
+                          Yearly Premium
+                        </h3>
+                        <p className='text-gray-300 text-sm'>
+                          {plans.yearly.days} days
+                        </p>
+                      </div>
+                      <div className='flex items-center gap-3'>
+                        <p className='text-2xl font-bold'>
+                          {plans.yearly.price} <span className='text-sm'>coins</span>
+                        </p>
+                        <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedPlan === 'yearly' ? 'rotate-180' : ''}`} />
+                      </div>
+                    </div>
+                  </div>
+                  {expandedPlan === 'yearly' && (
+                    <div className='px-4 pb-4'>
+                      <div className='border-t border-gray-600 pt-3 mb-3 space-y-2'>
+                        {premiumFeatures.map((feature, index) => (
+                          <div key={index} className='flex items-center gap-2'>
+                            <div className='text-yellow-400'>{feature.icon}</div>
+                            <span className='text-sm text-gray-200'>{feature.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => handlePurchase('yearly')}
+                        disabled={purchasing}
+                        className='w-full py-3 bg-white text-gray-900 font-semibold rounded-xl disabled:opacity-50 hover:bg-gray-100 transition-colors'
+                      >
+                        {purchasing ? 'Processing...' : 'Buy Now'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -189,13 +211,13 @@ const Subscription = () => {
             {/* Balance Info */}
             <div className='text-center'>
               <p className='text-gray-500 dark:text-gray-400 mb-2'>
-                So du hien tai: <span className='font-semibold'>{balance.toLocaleString()} coins</span>
+                Current balance: <span className='font-semibold'>{balance.toLocaleString()} coins</span>
               </p>
               <button
                 onClick={() => navigate('/topup')}
-                className='text-indigo-600 dark:text-indigo-400 font-medium hover:underline'
+                className='text-gray-900 dark:text-white font-medium hover:underline'
               >
-                Nap them coins
+                Top up coins
               </button>
             </div>
           </>
