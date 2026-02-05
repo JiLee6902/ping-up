@@ -3,6 +3,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RedisService } from './service/redis.service';
 import { RedisCacheService } from './service/redis-cache.service';
 import { RedisLikeService } from './service/redis-like.service';
+import { RedisRateLimiterService } from './service/redis-rate-limiter.service';
+import { RedisTrendingService } from './service/redis-trending.service';
+import { RedisPresenceService } from './service/redis-presence.service';
 
 @Global()
 @Module({
@@ -23,7 +26,18 @@ import { RedisLikeService } from './service/redis-like.service';
     RedisService,
     RedisCacheService,
     RedisLikeService,
+    RedisRateLimiterService,
+    RedisTrendingService,
+    RedisPresenceService,
   ],
-  exports: ['REDIS_CLIENT', RedisService, RedisCacheService, RedisLikeService],
+  exports: [
+    'REDIS_CLIENT',
+    RedisService,
+    RedisCacheService,
+    RedisLikeService,
+    RedisRateLimiterService,
+    RedisTrendingService,
+    RedisPresenceService,
+  ],
 })
 export class RedisModule {}
