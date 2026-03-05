@@ -258,7 +258,7 @@ jobs:
             echo "Docker Login..."
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login --username "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-            export VERSION="${{ github.sha }}"
+            export VERSION="latest"
             export REGISTRY="${{ secrets.DOCKER_USERNAME }}"
 
             # Run migrations if requested
@@ -269,7 +269,7 @@ jobs:
               docker run --rm \
                 --env-file .env.production \
                 --network pingup_pingup_network \
-                ${{ secrets.DOCKER_USERNAME }}/pingup-app-api:${{ github.sha }} \
+                ${{ secrets.DOCKER_USERNAME }}/pingup-app-api:latest \
                 npx ts-node -r tsconfig-paths/register node_modules/typeorm/cli.js migration:run -d libs/entity/src/data-source.ts
               echo "Migrations completed!"
             fi
