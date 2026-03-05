@@ -14,6 +14,14 @@ on:
           - all
           - infrastructure
           - migrate-only
+      target:
+        description: 'Deploy target'
+        required: true
+        type: choice
+        options:
+          - aws
+          - hetzner
+        default: aws
       run_migrations:
         description: 'Run migrations before deploy?'
         required: false
@@ -26,7 +34,7 @@ env:
 jobs:
   # Job chỉ chạy migrations
   migrate-only:
-    if: ${{ github.event.inputs.app == 'migrate-only' }}
+    if: ${{ github.event.inputs.app == 'migrate-only' && github.event.inputs.target == 'aws' }}
     runs-on: ubuntu-latest
     steps:
       - name: Run Migrations
@@ -56,7 +64,7 @@ jobs:
           echo "### Migrations Completed! :rocket:" >> $GITHUB_STEP_SUMMARY
 
   deploy-single:
-    if: ${{ github.event.inputs.app != 'all' && github.event.inputs.app != 'infrastructure' && github.event.inputs.app != 'migrate-only' }}
+    if: ${{ github.event.inputs.target == 'aws' && github.event.inputs.app != 'all' && github.event.inputs.app != 'infrastructure' && github.event.inputs.app != 'migrate-only' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to EC2
@@ -124,7 +132,7 @@ jobs:
           echo "**Host:** ${{ secrets.PRODUCTION_HOST }}" >> $GITHUB_STEP_SUMMARY
 
   deploy-all:
-    if: ${{ github.event.inputs.app == 'all' }}
+    if: ${{ github.event.inputs.target == 'aws' && github.event.inputs.app == 'all' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy All Services to EC2
@@ -177,7 +185,7 @@ jobs:
           echo "**Version:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
   deploy-infrastructure:
-    if: ${{ github.event.inputs.app == 'infrastructure' }}
+    if: ${{ github.event.inputs.target == 'aws' && github.event.inputs.app == 'infrastructure' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy Infrastructure to EC2
@@ -215,3 +223,148 @@ jobs:
         run: |
           echo "### Infrastructure Deployed! :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "Services: PostgreSQL, Redis" >> $GITHUB_STEP_SUMMARY
+
+  # =============================================
+  # Hetzner Cloud Deploy Jobs
+  # =============================================
+
+  deploy-hetzner:
+    if: ${{ github.event.inputs.target == 'hetzner' && github.event.inputs.app != 'infrastructure' && github.event.inputs.app != 'migrate-only' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Hetzner Cloud
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -e
+
+            cd /opt/pingup
+
+            # Download latest compose file
+            curl -sO https://raw.githubusercontent.com/JiLee6902/ping-up/main/server-nestjs/docker-compose.hetzner.yml
+
+            # Download latest nginx config
+            mkdir -p scripts/hetzner
+            curl -sO --output-dir scripts/hetzner https://raw.githubusercontent.com/JiLee6902/ping-up/main/server-nestjs/scripts/hetzner/nginx.conf
+
+            if [ ! -f .env.production ]; then
+              echo "ERROR: .env.production not found! Please create it first."
+              exit 1
+            fi
+
+            echo "Docker Login..."
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login --username "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+            export VERSION="${{ github.sha }}"
+            export REGISTRY="${{ secrets.DOCKER_USERNAME }}"
+
+            # Run migrations if requested
+            if [ "${{ github.event.inputs.run_migrations }}" = "true" ]; then
+              echo "Running migrations..."
+              docker compose --env-file .env.production -f docker-compose.hetzner.yml up -d postgres
+              sleep 5
+              docker run --rm \
+                --env-file .env.production \
+                --network pingup_pingup_network \
+                ${{ secrets.DOCKER_USERNAME }}/pingup-app-api:${{ github.sha }} \
+                npx ts-node -r tsconfig-paths/register node_modules/typeorm/cli.js migration:run -d libs/entity/src/data-source.ts
+              echo "Migrations completed!"
+            fi
+
+            # Deploy based on app selection
+            if [ "${{ github.event.inputs.app }}" = "all" ]; then
+              echo "Pulling all app images..."
+              docker compose --env-file .env.production -f docker-compose.hetzner.yml pull app-api notification cronjob-worker
+
+              echo "Restarting all services..."
+              docker compose --env-file .env.production -f docker-compose.hetzner.yml up -d
+            else
+              echo "Pulling pingup-${{ github.event.inputs.app }}..."
+              docker compose --env-file .env.production -f docker-compose.hetzner.yml pull ${{ github.event.inputs.app }}
+
+              echo "Restarting ${{ github.event.inputs.app }}..."
+              docker compose --env-file .env.production -f docker-compose.hetzner.yml up -d --force-recreate ${{ github.event.inputs.app }}
+            fi
+
+            # Cleanup old images
+            docker image prune -af --filter "until=72h"
+
+            echo "Deploy to Hetzner completed!"
+            docker compose --env-file .env.production -f docker-compose.hetzner.yml ps
+
+      - name: Summary
+        run: |
+          echo "### Hetzner Deploy Successful! :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**App:** ${{ github.event.inputs.app }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Host:** Hetzner Cloud (ARM)" >> $GITHUB_STEP_SUMMARY
+
+  deploy-hetzner-infrastructure:
+    if: ${{ github.event.inputs.target == 'hetzner' && github.event.inputs.app == 'infrastructure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Infrastructure to Hetzner
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -e
+
+            cd /opt/pingup
+
+            curl -sO https://raw.githubusercontent.com/JiLee6902/ping-up/main/server-nestjs/docker-compose.hetzner.yml
+
+            if [ ! -f .env.production ]; then
+              echo "ERROR: .env.production not found! Please create it first."
+              exit 1
+            fi
+
+            echo "Starting infrastructure services..."
+            docker compose --env-file .env.production -f docker-compose.hetzner.yml up -d postgres redis jaeger nginx
+
+            echo "Waiting for services to be healthy..."
+            sleep 15
+
+            echo "Infrastructure deployed!"
+            docker compose --env-file .env.production -f docker-compose.hetzner.yml ps
+
+      - name: Summary
+        run: |
+          echo "### Hetzner Infrastructure Deployed! :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "Services: PostgreSQL, Redis, Jaeger, Nginx" >> $GITHUB_STEP_SUMMARY
+
+  deploy-hetzner-migrate-only:
+    if: ${{ github.event.inputs.target == 'hetzner' && github.event.inputs.app == 'migrate-only' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Migrations on Hetzner
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/pingup
+
+            echo "Docker Login..."
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login --username "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+            echo "Running migrations..."
+            docker run --rm \
+              --env-file .env.production \
+              --network pingup_pingup_network \
+              ${{ secrets.DOCKER_USERNAME }}/pingup-app-api:latest \
+              npx ts-node -r tsconfig-paths/register node_modules/typeorm/cli.js migration:run -d libs/entity/src/data-source.ts
+
+            echo "Migrations completed!"
+
+      - name: Summary
+        run: |
+          echo "### Hetzner Migrations Completed! :rocket:" >> $GITHUB_STEP_SUMMARY
