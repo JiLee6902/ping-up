@@ -326,7 +326,7 @@ jobs:
             fi
 
             echo "Starting infrastructure services..."
-            docker compose --env-file .env.production -f docker-compose.hetzner.yml up -d postgres redis jaeger nginx
+            docker compose --env-file .env.production -f docker-compose.hetzner.yml up -d postgres redis nginx
 
             echo "Waiting for services to be healthy..."
             sleep 15
@@ -337,7 +337,7 @@ jobs:
       - name: Summary
         run: |
           echo "### Hetzner Infrastructure Deployed! :rocket:" >> $GITHUB_STEP_SUMMARY
-          echo "Services: PostgreSQL, Redis, Jaeger, Nginx" >> $GITHUB_STEP_SUMMARY
+          echo "Services: PostgreSQL, Redis, Nginx" >> $GITHUB_STEP_SUMMARY
 
   deploy-hetzner-migrate-only:
     if: ${{ github.event.inputs.target == 'hetzner' && github.event.inputs.app == 'migrate-only' }}
