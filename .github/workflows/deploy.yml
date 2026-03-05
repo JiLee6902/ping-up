@@ -51,7 +51,7 @@ jobs:
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login --username "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
             echo "Running migrations..."
-            docker run --rm \
+            docker run --rm --pull always \
               --env-file .env.production \
               --network pingup_pingup_network \
               ${{ secrets.DOCKER_USERNAME }}/pingup-app-api:latest \
@@ -100,7 +100,7 @@ jobs:
             # Run migrations if requested
             if [ "${{ github.event.inputs.run_migrations }}" = "true" ]; then
               echo "Running migrations..."
-              docker run --rm \
+              docker run --rm --pull always \
                 --env-file .env.production \
                 --network pingup_pingup_network \
                 ${{ env.REGISTRY }}/pingup-app-api:${{ github.sha }} \
@@ -266,7 +266,7 @@ jobs:
               echo "Running migrations..."
               docker compose --env-file .env.production -f docker-compose.hetzner.yml up -d postgres
               sleep 5
-              docker run --rm \
+              docker run --rm --pull always \
                 --env-file .env.production \
                 --network pingup_pingup_network \
                 ${{ secrets.DOCKER_USERNAME }}/pingup-app-api:latest \
@@ -357,7 +357,7 @@ jobs:
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login --username "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
             echo "Running migrations..."
-            docker run --rm \
+            docker run --rm --pull always \
               --env-file .env.production \
               --network pingup_pingup_network \
               ${{ secrets.DOCKER_USERNAME }}/pingup-app-api:latest \
