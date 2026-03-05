@@ -14,7 +14,7 @@ export class AddMessageDeletionAndUnsend1769800000000 implements MigrationInterf
                 "updated_by" character varying DEFAULT 'SYSTEM',
                 "deleted_at" TIMESTAMP WITH TIME ZONE,
                 "message_id" uuid NOT NULL,
-                "user_id" character varying NOT NULL,
+                "user_id" uuid NOT NULL,
                 CONSTRAINT "UQ_message_deletions_message_user" UNIQUE ("message_id", "user_id"),
                 CONSTRAINT "PK_message_deletions" PRIMARY KEY ("id")
             )
@@ -47,7 +47,7 @@ export class AddMessageDeletionAndUnsend1769800000000 implements MigrationInterf
                 "updated_by" character varying DEFAULT 'SYSTEM',
                 "deleted_at" TIMESTAMP WITH TIME ZONE,
                 "group_message_id" uuid NOT NULL,
-                "user_id" character varying NOT NULL,
+                "user_id" uuid NOT NULL,
                 CONSTRAINT "UQ_group_message_deletions_message_user" UNIQUE ("group_message_id", "user_id"),
                 CONSTRAINT "PK_group_message_deletions" PRIMARY KEY ("id")
             )
