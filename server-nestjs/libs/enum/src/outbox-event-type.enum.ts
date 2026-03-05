@@ -1,0 +1,42 @@
+export enum OutboxAggregateType {
+  MESSAGE = 'message',
+  POST = 'post',
+  COMMENT = 'comment',
+  USER = 'user',
+  CONNECTION = 'connection',
+  NOTIFICATION = 'notification',
+  STORY = 'story',
+}
+
+export enum OutboxEventType {
+  // Message events
+  MESSAGE_SENT = 'MESSAGE_SENT',
+  MESSAGE_SEEN = 'MESSAGE_SEEN',
+  MESSAGE_UNSENT = 'MESSAGE_UNSENT',
+  MESSAGE_REQUEST_SENT = 'MESSAGE_REQUEST_SENT',
+
+  // Post events
+  POST_LIKED = 'POST_LIKED',
+  POST_UNLIKED = 'POST_UNLIKED',
+  POST_REPOSTED = 'POST_REPOSTED',
+  POST_COMMENTED = 'POST_COMMENTED',
+
+  // Comment events
+  COMMENT_ADDED = 'COMMENT_ADDED',
+
+  // User events
+  USER_FOLLOWED = 'USER_FOLLOWED',
+  FOLLOW_REQUEST_SENT = 'FOLLOW_REQUEST_SENT',
+  FOLLOW_REQUEST_ACCEPTED = 'FOLLOW_REQUEST_ACCEPTED',
+
+  // Connection events
+  CONNECTION_REQUESTED = 'CONNECTION_REQUESTED',
+  CONNECTION_ACCEPTED = 'CONNECTION_ACCEPTED',
+
+  // Notification events
+  NOTIFICATION_CREATED = 'NOTIFICATION_CREATED',
+
+  // Chat settings events
+  CHAT_SETTINGS_UPDATED = 'CHAT_SETTINGS_UPDATED',
+  CHAT_EVENT_CREATED = 'CHAT_EVENT_CREATED',
+}

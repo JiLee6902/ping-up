@@ -11,6 +11,9 @@ import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { authenticator } from 'otplib';
 import * as QRCode from 'qrcode';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from '@app/entity';
 import { AuthRepository } from '../repository/auth.repository';
 import { RegisterDto, LoginDto, RefreshTokenDto, VerifyTwoFactorDto, LoginTwoFactorDto, GuestLoginDto } from '../dto';
 
@@ -38,10 +41,23 @@ export interface AuthResponse {
 export class AuthService {
   private static readonly MAX_GUEST_VISITS = 3;
 
+  private static readonly GUEST_AUTO_FOLLOW_IDS = [
+    'a0000001-0000-4000-a000-000000000001', // Alice
+    'a0000001-0000-4000-a000-000000000002', // Bob
+    'a0000001-0000-4000-a000-000000000003', // Charlie
+    'a0000001-0000-4000-a000-000000000004', // Diana
+    'a0000001-0000-4000-a000-000000000005', // Ethan
+    'a0000001-0000-4000-a000-000000000006', // Fiona
+    'a0000001-0000-4000-a000-000000000008', // Hannah
+    'a0000001-0000-4000-a000-000000000010', // Julia
+  ];
+
   constructor(
     private readonly authRepository: AuthRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   async register(dto: RegisterDto, guestUserId?: string): Promise<AuthResponse> {
@@ -213,6 +229,9 @@ export class AuthService {
       isGuest: true,
       guestVisitCount: 1,
     });
+
+    // Auto-follow seed users so guest sees stories & feed content
+    await this.autoFollowSeedUsers(user.id);
 
     const tokens = await this.generateTokens(user.id, user.email);
 
@@ -510,6 +529,19 @@ export class AuthService {
         backupCodesRemaining: user.twoFactorBackupCodes?.length || 0,
       },
     };
+  }
+
+  private async autoFollowSeedUsers(guestUserId: string): Promise<void> {
+    try {
+      const values = AuthService.GUEST_AUTO_FOLLOW_IDS
+        .map((id) => `('${id}', '${guestUserId}')`)
+        .join(', ');
+      await this.userRepository.query(
+        `INSERT INTO user_followers (follower_id, following_id) VALUES ${values} ON CONFLICT DO NOTHING`,
+      );
+    } catch (error) {
+      // Non-critical: don't fail guest login if auto-follow fails
+    }
   }
 
   private async generateBackupCodes(): Promise<string[]> {

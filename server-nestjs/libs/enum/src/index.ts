@@ -7,3 +7,4 @@ export * from './reaction-type.enum';
 export * from './subscription-tier.enum';
 export * from './transaction-type.enum';
 export * from './payment-status.enum';
+export * from './outbox-event-type.enum';

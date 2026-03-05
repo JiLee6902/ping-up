@@ -33,6 +33,7 @@ import {
   UserKeyBundle,
   MessageDeletion,
   GroupMessageDeletion,
+  OutboxEvent,
 } from './entities';
 
 // Load env file based on NODE_ENV
@@ -74,6 +75,7 @@ const entities = [
   UserKeyBundle,
   MessageDeletion,
   GroupMessageDeletion,
+  OutboxEvent,
 ];
 
 export const dataSourceOptions: DataSourceOptions = {

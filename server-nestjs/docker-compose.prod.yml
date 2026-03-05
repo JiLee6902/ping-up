@@ -3,6 +3,7 @@ services:
     image: postgres:15-alpine
     container_name: pingup-postgres
     restart: unless-stopped
+    command: postgres -c wal_level=logical -c max_replication_slots=4 -c max_wal_senders=4
     env_file:
       - .env.production
     environment:
@@ -141,6 +142,30 @@ services:
   #       max-file: "3"
   #       compress: "true"
 
+  # Jaeger (distributed tracing)
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    container_name: pingup-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4318:4318"     # OTLP HTTP
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks:
+      - pingup_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+        compress: "true"
+
   app-api:
     image: ${REGISTRY}/pingup-app-api:${VERSION:-latest}
     container_name: pingup-app-api
@@ -155,6 +180,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
+      OTEL_SERVICE_NAME: pingup-app-api
+      JAEGER_ENDPOINT: http://jaeger:4318/v1/traces
+      TRACING_ENABLED: "true"
+      OTEL_TRACES_SAMPLER_ARG: "0.1"
     volumes:
       - app_api_logs:/app/logs
     networks:
@@ -194,6 +223,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4001
+      OTEL_SERVICE_NAME: pingup-notification
+      JAEGER_ENDPOINT: http://jaeger:4318/v1/traces
+      TRACING_ENABLED: "true"
+      OTEL_TRACES_SAMPLER_ARG: "0.1"
     volumes:
       - notification_logs:/app/logs
     networks:
@@ -229,6 +262,10 @@ services:
       NODE_ENV: production
       PORT: 4002
       NODE_OPTIONS: "--expose-gc --max-old-space-size=1024"
+      OTEL_SERVICE_NAME: pingup-cronjob-worker
+      JAEGER_ENDPOINT: http://jaeger:4318/v1/traces
+      TRACING_ENABLED: "true"
+      OTEL_TRACES_SAMPLER_ARG: "0.1"
     volumes:
       - cronjob_logs:/app/logs
     networks:

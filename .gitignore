@@ -1,7 +1,8 @@
 # Dependencies
 node_modules/
-note.txt
-noted.txt
+
+# Text files (notes, scratch)
+*.txt
 
 
 # Environment files

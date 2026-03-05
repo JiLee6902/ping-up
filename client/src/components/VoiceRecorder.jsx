@@ -13,6 +13,7 @@ const VoiceRecorder = ({ onSend, onCancel }) => {
   const timerRef = useRef(null)
   const audioBlobRef = useRef(null)
   const audioRef = useRef(null)
+  const durationRef = useRef(0)
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60)
@@ -43,7 +44,7 @@ const VoiceRecorder = ({ onSend, onCancel }) => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         audioBlobRef.current = blob
         setState('preview')
-        setPreviewDuration(duration)
+        setPreviewDuration(durationRef.current)
       }
 
       mediaRecorder.start()
@@ -51,12 +52,15 @@ const VoiceRecorder = ({ onSend, onCancel }) => {
       setDuration(0)
 
       timerRef.current = setInterval(() => {
-        setDuration((d) => d + 1)
+        setDuration((d) => {
+          durationRef.current = d + 1
+          return d + 1
+        })
       }, 1000)
     } catch (err) {
       console.error('Microphone access denied:', err)
     }
-  }, [duration])
+  }, [])
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -92,6 +96,7 @@ const VoiceRecorder = ({ onSend, onCancel }) => {
     setDuration(0)
     setPreviewDuration(0)
     setIsPlaying(false)
+    durationRef.current = 0
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current = null

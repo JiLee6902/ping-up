@@ -1,18 +1,3 @@
-# Hetzner Cloud - CX23 x86: 2 vCPU + 4GB RAM + 40GB SSD (~$4.09/month)
-# No Prometheus/Grafana/Jaeger — tight on RAM
-# All traffic goes through nginx reverse proxy (ports 80/443 only)
-#
-# Resource budget (4GB total, ~800MB for OS):
-#   postgres:       512MB   | 0.5 CPU
-#   redis:          128MB   | 0.15 CPU
-#   nginx:           32MB   | 0.1 CPU
-#   app-api:        512MB   | 0.5 CPU
-#   notification:   256MB   | 0.25 CPU
-#   cronjob-worker: 256MB   | 0.25 CPU
-#   ─────────────────────────────────
-#   Total:        ~1.7GB    | 1.75 CPU
-#   Remaining:    ~2.3GB for OS cache + buffer
-#   Swap:          2GB (safety net)
 
 services:
   postgres:

@@ -28,3 +28,4 @@ export * from './scheduled-post.entity';
 export * from './user-key-bundle.entity';
 export * from './message-deletion.entity';
 export * from './group-message-deletion.entity';
+export * from './outbox-event.entity';

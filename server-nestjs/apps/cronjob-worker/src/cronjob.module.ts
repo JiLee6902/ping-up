@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { dataSourceOptions } from '@app/entity';
 import { EmailModule } from '@app/external-infra/email';
 // import { MetricsModule } from '@app/external-infra/prometheus'; // Temporarily disabled
+import { TracingModule } from '@app/external-infra/tracing';
 import { Message, User } from '@app/entity';
 import { UnseenMessagesCron } from './unseen-messages.cron';
 
@@ -25,6 +26,7 @@ import { UnseenMessagesCron } from './unseen-messages.cron';
     ScheduleModule.forRoot(),
     EmailModule,
     // MetricsModule, // Temporarily disabled
+    TracingModule,
   ],
   providers: [UnseenMessagesCron],
 })

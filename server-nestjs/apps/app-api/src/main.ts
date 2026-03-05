@@ -1,9 +1,13 @@
+import { initTracing } from '@app/external-infra/tracing/tracing-sdk';
+initTracing('pingup-app-api');
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from '@app/shared-libs';
 // import { MetricsInterceptor } from '@app/external-infra/prometheus'; // Temporarily disabled
+import { TracingInterceptor } from '@app/external-infra/tracing';
 import { BotBlockerMiddleware } from '@app/shared-libs/middlewares';
 
 async function bootstrap() {
@@ -37,6 +41,9 @@ async function bootstrap() {
 
   // Global metrics interceptor (Temporarily disabled)
   // app.useGlobalInterceptors(app.get(MetricsInterceptor));
+
+  // Global tracing interceptor
+  app.useGlobalInterceptors(app.get(TracingInterceptor));
 
   // Global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());

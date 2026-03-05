@@ -6,6 +6,7 @@ import { dataSourceOptions } from '@app/entity';
 import { User } from '@app/entity';
 import { EmailModule } from '@app/external-infra/email';
 // import { MetricsModule } from '@app/external-infra/prometheus'; // Temporarily disabled
+import { TracingModule } from '@app/external-infra/tracing';
 import { NOTIFICATION_QUEUE } from '@app/external-infra/queue';
 import { NotificationProcessor } from './notification.processor';
 
@@ -39,6 +40,7 @@ import { NotificationProcessor } from './notification.processor';
     }),
     EmailModule,
     // MetricsModule, // Temporarily disabled
+    TracingModule,
   ],
   providers: [NotificationProcessor],
 })
