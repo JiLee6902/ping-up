@@ -34,6 +34,9 @@ import {
   MessageDeletion,
   GroupMessageDeletion,
   OutboxEvent,
+  Product,
+  SellerReview,
+  MarketplaceOrder,
 } from './entities';
 
 // Load env file based on NODE_ENV
@@ -76,6 +79,9 @@ const entities = [
   MessageDeletion,
   GroupMessageDeletion,
   OutboxEvent,
+  Product,
+  SellerReview,
+  MarketplaceOrder,
 ];
 
 export const dataSourceOptions: DataSourceOptions = {

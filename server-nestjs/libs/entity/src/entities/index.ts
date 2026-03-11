@@ -29,3 +29,6 @@ export * from './user-key-bundle.entity';
 export * from './message-deletion.entity';
 export * from './group-message-deletion.entity';
 export * from './outbox-event.entity';
+export * from './product.entity';
+export * from './seller-review.entity';
+export * from './marketplace-order.entity';

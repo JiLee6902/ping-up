@@ -8,3 +8,7 @@ export * from './subscription-tier.enum';
 export * from './transaction-type.enum';
 export * from './payment-status.enum';
 export * from './outbox-event-type.enum';
+export * from './product-status.enum';
+export * from './product-condition.enum';
+export * from './product-category.enum';
+export * from './marketplace-order-status.enum';

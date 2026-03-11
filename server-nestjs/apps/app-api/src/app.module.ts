@@ -25,6 +25,7 @@ import { ReportModule } from './domain/report/report.module';
 import { GroupChatModule } from './domain/group-chat/group-chat.module';
 import { PaymentModule } from './domain/payment/payment.module';
 import { EncryptionModule } from './domain/encryption/encryption.module';
+import { MarketplaceModule } from './domain/marketplace/marketplace.module';
 import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 
@@ -96,6 +97,7 @@ import { JobsModule } from './jobs/jobs.module';
     GroupChatModule,
     PaymentModule,
     EncryptionModule,
+    MarketplaceModule,
 
     // Health check
     HealthModule,

@@ -25,6 +25,10 @@ import Wallet from './pages/Wallet'
 import TopUp from './pages/TopUp'
 import PaymentResult from './pages/PaymentResult'
 import Subscription from './pages/Subscription'
+import Marketplace from './pages/Marketplace/Marketplace'
+import ProductDetail from './pages/Marketplace/ProductDetail'
+import CreateProduct from './pages/Marketplace/CreateProduct'
+import SellerProfile from './pages/Marketplace/SellerProfile'
 import ProtectedRoute from './components/ProtectedRoute'
 import Notification from './components/Notification'
 import VideoCall from './components/VideoCall'
@@ -137,6 +141,9 @@ const App = () => {
         {/* Public Feed - accessible without auth */}
         <Route path='/' element={<Layout requireAuth={false} />}>
           <Route index element={<Feed />} />
+          <Route path='marketplace' element={<Marketplace />} />
+          <Route path='marketplace/:productId' element={<ProductDetail />} />
+          <Route path='marketplace/seller/:sellerId' element={<SellerProfile />} />
         </Route>
 
         {/* Protected routes */}
@@ -162,6 +169,7 @@ const App = () => {
             <Route path='profile/:profileId' element={<Profile />} />
             <Route path='profile/username/:username' element={<Profile />} />
             <Route path='create-post' element={<CreatePost />} />
+            <Route path='marketplace/create' element={<CreateProduct />} />
           </Route>
         </Route>
       </Routes>

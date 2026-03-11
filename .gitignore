@@ -28,6 +28,10 @@ Thumbs.db
 *.swp
 *.swo
 
+# SSH deploy keys
+deploy-key
+deploy-key.pub
+
 # Temporary files
 tmp/
 temp/
