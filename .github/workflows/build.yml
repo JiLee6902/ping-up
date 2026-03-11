@@ -26,13 +26,17 @@ env:
 jobs:
   build-single:
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.app != 'all' }}
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux/amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -57,42 +61,78 @@ jobs:
         with:
           context: ./server-nestjs
           file: ./server-nestjs/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
           no-cache: true
           build-args: |
             APP_NAME=${{ github.event.inputs.app }}
             APP_PORT=${{ steps.set-port.outputs.port }}
           tags: |
-            ${{ env.REGISTRY }}/pingup-${{ github.event.inputs.app }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/pingup-${{ github.event.inputs.app }}:latest
+            ${{ env.REGISTRY }}/pingup-${{ github.event.inputs.app }}:${{ github.sha }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+
+  merge-single:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.app != 'all' }}
+    needs: build-single
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Create multi-arch manifest
+        run: |
+          APP="${{ github.event.inputs.app }}"
+          docker manifest create ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }} \
+            ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }}-amd64 \
+            ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }}-arm64
+          docker manifest push ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }}
+
+          docker manifest create ${{ env.REGISTRY }}/pingup-${APP}:latest \
+            ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }}-amd64 \
+            ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }}-arm64
+          docker manifest push ${{ env.REGISTRY }}/pingup-${APP}:latest
 
       - name: Summary
         run: |
           echo "### Build Successful! :rocket:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**App:** ${{ github.event.inputs.app }}" >> $GITHUB_STEP_SUMMARY
           echo "**Tag:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** ${{ env.REGISTRY }}/pingup-${{ github.event.inputs.app }}:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
   build-all:
-    if: ${{ github.event_name == 'push' || github.event.inputs.app == 'all' }}
-    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.app == 'all') }}
     strategy:
       matrix:
         include:
           - app: app-api
             port: 3000
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - app: app-api
+            port: 3000
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
           - app: notification
             port: 3002
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - app: notification
+            port: 3002
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
           - app: cronjob-worker
             port: 3003
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - app: cronjob-worker
+            port: 3003
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -103,20 +143,45 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and Push ${{ matrix.app }}
+      - name: Build and Push ${{ matrix.app }} (${{ matrix.platform }})
         uses: docker/build-push-action@v5
         with:
           context: ./server-nestjs
           file: ./server-nestjs/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
           no-cache: true
           build-args: |
             APP_NAME=${{ matrix.app }}
             APP_PORT=${{ matrix.port }}
           tags: |
-            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:latest
+            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+
+  merge-all:
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.app == 'all') }}
+    needs: build-all
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [app-api, notification, cronjob-worker]
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Create multi-arch manifest for ${{ matrix.app }}
+        run: |
+          docker manifest create ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }} \
+            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-amd64 \
+            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-arm64
+          docker manifest push ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}
+
+          docker manifest create ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:latest \
+            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-amd64 \
+            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-arm64
+          docker manifest push ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:latest
 
       - name: Summary
         run: |
