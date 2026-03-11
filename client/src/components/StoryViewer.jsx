@@ -344,7 +344,7 @@ const StoryViewer = ({ storyGroup, onClose, onDelete, onNextGroup, onPrevGroup, 
                 </div>
 
                 {/* Story Content */}
-                <div className='w-full h-full flex items-center justify-center'>
+                <div className='relative z-10 w-full h-full flex items-center justify-center'>
                     {renderContent()}
                 </div>
 
