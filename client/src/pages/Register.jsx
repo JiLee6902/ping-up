@@ -3,7 +3,7 @@ import { assets } from '../assets/assets'
 import { Star, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
 import { register } from '../features/auth/authSlice'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -18,6 +18,8 @@ const Register = () => {
 
   const dispatch = useDispatch()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/'
   const { isLoading, isGuest, user: guestUser } = useSelector((state) => state.auth)
 
   useEffect(() => {
@@ -56,7 +58,7 @@ const Register = () => {
     }))
 
     if (register.fulfilled.match(result)) {
-      navigate('/')
+      navigate(redirectTo)
     }
   }
 

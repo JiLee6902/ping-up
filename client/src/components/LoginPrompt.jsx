@@ -1,8 +1,10 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { X, LogIn } from 'lucide-react';
 
 export default function LoginPrompt({ message, onClose }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectPath = location.pathname + location.search;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -37,7 +39,7 @@ export default function LoginPrompt({ message, onClose }) {
             Cancel
           </button>
           <button
-            onClick={() => navigate('/login')}
+            onClick={() => navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`)}
             className="flex-1 py-2.5 rounded-xl bg-gray-900 dark:bg-white dark:text-gray-900 text-white text-sm font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
           >
             Log In
@@ -45,7 +47,7 @@ export default function LoginPrompt({ message, onClose }) {
         </div>
 
         <button
-          onClick={() => navigate('/register')}
+          onClick={() => navigate(`/register?redirect=${encodeURIComponent(redirectPath)}`)}
           className="mt-3 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
         >
           Don't have an account? <span className="font-medium underline">Sign up</span>

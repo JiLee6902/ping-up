@@ -3,7 +3,7 @@ import { assets } from '../assets/assets'
 import { Star, Eye, EyeOff, Loader2, Shield, ArrowLeft, UserRound } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
 import { login, loginWithTwoFactor, clear2FA, guestLogin } from '../features/auth/authSlice'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 const Login = () => {
   const [email, setEmail] = useState('')
@@ -14,19 +14,21 @@ const Login = () => {
 
   const dispatch = useDispatch()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/'
   const { isLoading, requiresTwoFactor, tempToken, isAuthenticated } = useSelector((state) => state.auth)
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/')
+      navigate(redirectTo)
     }
-  }, [isAuthenticated, navigate])
+  }, [isAuthenticated, navigate, redirectTo])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     const result = await dispatch(login({ email, password }))
     if (login.fulfilled.match(result) && !result.payload.requiresTwoFactor) {
-      navigate('/')
+      navigate(redirectTo)
     }
   }
 
@@ -34,7 +36,7 @@ const Login = () => {
     e.preventDefault()
     const result = await dispatch(loginWithTwoFactor({ tempToken, code: twoFactorCode }))
     if (loginWithTwoFactor.fulfilled.match(result)) {
-      navigate('/')
+      navigate(redirectTo)
     }
   }
 
@@ -43,7 +45,7 @@ const Login = () => {
     const result = await dispatch(guestLogin())
     setGuestLoading(false)
     if (guestLogin.fulfilled.match(result)) {
-      navigate('/')
+      navigate(redirectTo)
     }
   }
 
