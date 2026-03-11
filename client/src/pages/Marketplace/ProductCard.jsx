@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Heart, Eye, MapPin, MoreVertical, Trash2, CheckCircle, ShoppingBag } from 'lucide-react';
 import { useState } from 'react';
 import { toggleSaveProduct, deleteProduct, markAsSold } from '../../features/marketplace/marketplaceSlice';
+import LoginPrompt from '../../components/LoginPrompt';
 
 const CONDITION_LABELS = {
   new: 'New',
@@ -34,10 +35,11 @@ export default function ProductCard({ product, isOwner = false }) {
   const { userData } = useSelector((state) => state.user);
   const [showMenu, setShowMenu] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [loginPrompt, setLoginPrompt] = useState(false);
 
   const handleSave = (e) => {
     e.stopPropagation();
-    if (!userData) return;
+    if (!userData) { setLoginPrompt(true); return; }
     dispatch(toggleSaveProduct(product.id));
   };
 
@@ -91,7 +93,7 @@ export default function ProductCard({ product, isOwner = false }) {
         )}
 
         {/* Save button */}
-        {!isOwner && userData && (
+        {!isOwner && (
           <button
             onClick={handleSave}
             className="absolute top-2.5 right-2.5 p-2 rounded-full bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-900 shadow-sm hover:shadow-md transition-all hover:scale-110"
@@ -174,6 +176,10 @@ export default function ProductCard({ product, isOwner = false }) {
           </div>
         )}
       </div>
+
+      {loginPrompt && (
+        <LoginPrompt message="Log in to save products." onClose={() => setLoginPrompt(false)} />
+      )}
     </div>
   );
 }

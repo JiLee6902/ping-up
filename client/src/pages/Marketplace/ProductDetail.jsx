@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, Share2, ShieldCheck, Clock, Tag,
 } from 'lucide-react';
 import { fetchProductDetail, toggleSaveProduct, clearCurrentProduct } from '../../features/marketplace/marketplaceSlice';
+import LoginPrompt from '../../components/LoginPrompt';
 
 const CONDITION_LABELS = {
   new: 'New', like_new: 'Like New', good: 'Good', fair: 'Fair', poor: 'Poor',
@@ -39,6 +40,7 @@ export default function ProductDetail() {
   const { currentProduct: product, detailLoading } = useSelector((state) => state.marketplace);
   const { userData } = useSelector((state) => state.user);
   const [currentImage, setCurrentImage] = useState(0);
+  const [loginPrompt, setLoginPrompt] = useState(null);
 
   useEffect(() => {
     dispatch(fetchProductDetail(productId));
@@ -192,14 +194,14 @@ export default function ProductDetail() {
             {!isOwner && (
               <div className="flex gap-2">
                 <button
-                  onClick={() => userData ? navigate(`/messages/${product.seller?.id}`) : navigate('/login')}
+                  onClick={() => userData ? navigate(`/messages/${product.seller?.id}`) : setLoginPrompt('Log in to message this seller.')}
                   className="flex-1 flex items-center justify-center gap-2 bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 text-white py-3.5 rounded-xl font-semibold transition-all hover:shadow-lg text-sm"
                 >
                   <MessageCircle className="w-4 h-4" />
                   Message Seller
                 </button>
                 <button
-                  onClick={() => userData ? dispatch(toggleSaveProduct(product.id)) : navigate('/login')}
+                  onClick={() => userData ? dispatch(toggleSaveProduct(product.id)) : setLoginPrompt('Log in to save products.')}
                   className={`p-3.5 rounded-xl border transition-all ${
                     product.isSaved
                       ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-500'
@@ -210,6 +212,8 @@ export default function ProductDetail() {
                 </button>
               </div>
             )}
+
+            {loginPrompt && <LoginPrompt message={loginPrompt} onClose={() => setLoginPrompt(null)} />}
 
             {/* Seller Card */}
             {product.seller && (

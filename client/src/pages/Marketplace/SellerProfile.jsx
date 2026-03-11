@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { ArrowLeft, Star, MessageCircle, MapPin, ShieldCheck, Calendar, Package } from 'lucide-react';
 import { fetchSellerProfile, createReview } from '../../features/marketplace/marketplaceSlice';
 import ProductCard from './ProductCard';
+import LoginPrompt from '../../components/LoginPrompt';
 
 function timeAgo(date) {
   const now = new Date();
@@ -25,6 +26,7 @@ export default function SellerProfile() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loginPrompt, setLoginPrompt] = useState(null);
 
   useEffect(() => {
     dispatch(fetchSellerProfile(sellerId));
@@ -123,14 +125,14 @@ export default function SellerProfile() {
             {!isOwnProfile && (
               <div className="flex gap-3">
                 <button
-                  onClick={() => userData ? navigate(`/messages/${sellerId}`) : navigate('/login')}
+                  onClick={() => userData ? navigate(`/messages/${sellerId}`) : setLoginPrompt('Log in to message this seller.')}
                   className="flex-1 flex items-center justify-center gap-2 bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 text-white py-3 rounded-xl font-medium transition-all hover:shadow-lg"
                 >
                   <MessageCircle className="w-4 h-4" />
                   Message Seller
                 </button>
                 <button
-                  onClick={() => userData ? setShowReviewForm(!showReviewForm) : navigate('/login')}
+                  onClick={() => userData ? setShowReviewForm(!showReviewForm) : setLoginPrompt('Log in to write a review.')}
                   className="flex items-center gap-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-5 py-3 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   <Star className="w-4 h-4" />
@@ -213,6 +215,8 @@ export default function SellerProfile() {
           </div>
         )}
       </div>
+
+      {loginPrompt && <LoginPrompt message={loginPrompt} onClose={() => setLoginPrompt(null)} />}
     </div>
   );
 }
