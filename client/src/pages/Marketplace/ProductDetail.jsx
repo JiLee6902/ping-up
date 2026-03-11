@@ -189,17 +189,17 @@ export default function ProductDetail() {
             </div>
 
             {/* Action Buttons */}
-            {!isOwner && userData && (
+            {!isOwner && (
               <div className="flex gap-2">
                 <button
-                  onClick={() => navigate(`/messages/${product.seller?.id}`)}
+                  onClick={() => userData ? navigate(`/messages/${product.seller?.id}`) : navigate('/login')}
                   className="flex-1 flex items-center justify-center gap-2 bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 text-white py-3.5 rounded-xl font-semibold transition-all hover:shadow-lg text-sm"
                 >
                   <MessageCircle className="w-4 h-4" />
                   Message Seller
                 </button>
                 <button
-                  onClick={() => dispatch(toggleSaveProduct(product.id))}
+                  onClick={() => userData ? dispatch(toggleSaveProduct(product.id)) : navigate('/login')}
                   className={`p-3.5 rounded-xl border transition-all ${
                     product.isSaved
                       ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-500'

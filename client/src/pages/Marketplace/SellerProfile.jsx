@@ -120,17 +120,17 @@ export default function SellerProfile() {
             </div>
 
             {/* Action Buttons */}
-            {userData && !isOwnProfile && (
+            {!isOwnProfile && (
               <div className="flex gap-3">
                 <button
-                  onClick={() => navigate(`/messages/${sellerId}`)}
+                  onClick={() => userData ? navigate(`/messages/${sellerId}`) : navigate('/login')}
                   className="flex-1 flex items-center justify-center gap-2 bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 text-white py-3 rounded-xl font-medium transition-all hover:shadow-lg"
                 >
                   <MessageCircle className="w-4 h-4" />
                   Message Seller
                 </button>
                 <button
-                  onClick={() => setShowReviewForm(!showReviewForm)}
+                  onClick={() => userData ? setShowReviewForm(!showReviewForm) : navigate('/login')}
                   className="flex items-center gap-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-5 py-3 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   <Star className="w-4 h-4" />
