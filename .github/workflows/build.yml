@@ -30,9 +30,9 @@ jobs:
       matrix:
         include:
           - runner: ubuntu-latest
-            platform: linux/amd64
+            arch: amd64
           - runner: ubuntu-24.04-arm
-            platform: linux/arm64
+            arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
@@ -57,24 +57,23 @@ jobs:
           esac
 
       - name: Build and Push
-        uses: docker/build-push-action@v5
-        with:
-          context: ./server-nestjs
-          file: ./server-nestjs/Dockerfile
-          platforms: ${{ matrix.platform }}
-          push: true
-          no-cache: true
-          build-args: |
-            APP_NAME=${{ github.event.inputs.app }}
-            APP_PORT=${{ steps.set-port.outputs.port }}
-          tags: |
-            ${{ env.REGISTRY }}/pingup-${{ github.event.inputs.app }}:${{ github.sha }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+        run: |
+          docker build \
+            --build-arg APP_NAME=${{ github.event.inputs.app }} \
+            --build-arg APP_PORT=${{ steps.set-port.outputs.port }} \
+            -t ${{ env.REGISTRY }}/pingup-${{ github.event.inputs.app }}:${{ github.sha }}-${{ matrix.arch }} \
+            -f ./server-nestjs/Dockerfile \
+            ./server-nestjs
+          docker push ${{ env.REGISTRY }}/pingup-${{ github.event.inputs.app }}:${{ github.sha }}-${{ matrix.arch }}
 
   merge-single:
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.app != 'all' }}
     needs: build-single
     runs-on: ubuntu-latest
     steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -84,15 +83,16 @@ jobs:
       - name: Create multi-arch manifest
         run: |
           APP="${{ github.event.inputs.app }}"
-          docker manifest create ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }} \
-            ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }}-amd64 \
-            ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }}-arm64
-          docker manifest push ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }}
+          SHA="${{ github.sha }}"
+          IMG="${{ env.REGISTRY }}/pingup-${APP}"
 
-          docker manifest create ${{ env.REGISTRY }}/pingup-${APP}:latest \
-            ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }}-amd64 \
-            ${{ env.REGISTRY }}/pingup-${APP}:${{ github.sha }}-arm64
-          docker manifest push ${{ env.REGISTRY }}/pingup-${APP}:latest
+          docker buildx imagetools create -t ${IMG}:${SHA} \
+            ${IMG}:${SHA}-amd64 \
+            ${IMG}:${SHA}-arm64
+
+          docker buildx imagetools create -t ${IMG}:latest \
+            ${IMG}:${SHA}-amd64 \
+            ${IMG}:${SHA}-arm64
 
       - name: Summary
         run: |
@@ -108,27 +108,27 @@ jobs:
           - app: app-api
             port: 3000
             runner: ubuntu-latest
-            platform: linux/amd64
+            arch: amd64
           - app: app-api
             port: 3000
             runner: ubuntu-24.04-arm
-            platform: linux/arm64
+            arch: arm64
           - app: notification
             port: 3002
             runner: ubuntu-latest
-            platform: linux/amd64
+            arch: amd64
           - app: notification
             port: 3002
             runner: ubuntu-24.04-arm
-            platform: linux/arm64
+            arch: arm64
           - app: cronjob-worker
             port: 3003
             runner: ubuntu-latest
-            platform: linux/amd64
+            arch: amd64
           - app: cronjob-worker
             port: 3003
             runner: ubuntu-24.04-arm
-            platform: linux/arm64
+            arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
@@ -143,19 +143,15 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and Push ${{ matrix.app }} (${{ matrix.platform }})
-        uses: docker/build-push-action@v5
-        with:
-          context: ./server-nestjs
-          file: ./server-nestjs/Dockerfile
-          platforms: ${{ matrix.platform }}
-          push: true
-          no-cache: true
-          build-args: |
-            APP_NAME=${{ matrix.app }}
-            APP_PORT=${{ matrix.port }}
-          tags: |
-            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+      - name: Build and Push ${{ matrix.app }} (${{ matrix.arch }})
+        run: |
+          docker build \
+            --build-arg APP_NAME=${{ matrix.app }} \
+            --build-arg APP_PORT=${{ matrix.port }} \
+            -t ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-${{ matrix.arch }} \
+            -f ./server-nestjs/Dockerfile \
+            ./server-nestjs
+          docker push ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-${{ matrix.arch }}
 
   merge-all:
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.app == 'all') }}
@@ -165,6 +161,9 @@ jobs:
       matrix:
         app: [app-api, notification, cronjob-worker]
     steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -173,15 +172,16 @@ jobs:
 
       - name: Create multi-arch manifest for ${{ matrix.app }}
         run: |
-          docker manifest create ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }} \
-            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-amd64 \
-            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-arm64
-          docker manifest push ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}
+          IMG="${{ env.REGISTRY }}/pingup-${{ matrix.app }}"
+          SHA="${{ github.sha }}"
 
-          docker manifest create ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:latest \
-            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-amd64 \
-            ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:${{ github.sha }}-arm64
-          docker manifest push ${{ env.REGISTRY }}/pingup-${{ matrix.app }}:latest
+          docker buildx imagetools create -t ${IMG}:${SHA} \
+            ${IMG}:${SHA}-amd64 \
+            ${IMG}:${SHA}-arm64
+
+          docker buildx imagetools create -t ${IMG}:latest \
+            ${IMG}:${SHA}-amd64 \
+            ${IMG}:${SHA}-arm64
 
       - name: Summary
         run: |
