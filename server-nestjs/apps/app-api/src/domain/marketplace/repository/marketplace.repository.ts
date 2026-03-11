@@ -98,14 +98,14 @@ export class MarketplaceRepository {
         qb.orderBy('product.price', 'DESC');
         break;
       case ProductSortBy.OLDEST:
-        qb.orderBy('product.created_at', 'ASC');
+        qb.orderBy('product.createdAt', 'ASC');
         break;
       case ProductSortBy.MOST_VIEWED:
-        qb.orderBy('product.views_count', 'DESC');
+        qb.orderBy('product.viewsCount', 'DESC');
         break;
       case ProductSortBy.NEWEST:
       default:
-        qb.orderBy('product.created_at', 'DESC');
+        qb.orderBy('product.createdAt', 'DESC');
         break;
     }
 
@@ -129,7 +129,7 @@ export class MarketplaceRepository {
       .leftJoinAndSelect('product.user', 'user')
       .where('product.userId = :userId', { userId })
       .andWhere('product.status != :deleted', { deleted: ProductStatus.DELETED })
-      .orderBy('product.created_at', 'DESC')
+      .orderBy('product.createdAt', 'DESC')
       .skip(offset)
       .take(limit)
       .getMany();
@@ -167,7 +167,7 @@ export class MarketplaceRepository {
       .leftJoinAndSelect('product.user', 'user')
       .innerJoin('product.savedBy', 'savedUser', 'savedUser.id = :userId', { userId })
       .where('product.status = :status', { status: ProductStatus.ACTIVE })
-      .orderBy('product.created_at', 'DESC')
+      .orderBy('product.createdAt', 'DESC')
       .skip(offset)
       .take(limit)
       .getMany();
